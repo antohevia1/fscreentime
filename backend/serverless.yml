@@ -1,0 +1,350 @@
+service: screen-time-api
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1
+  stage: ${opt:stage, 'dev'}
+  memorySize: 1024
+  timeout: 30
+  logRetentionInDays: 30
+  
+  environment:
+    RAW_BUCKET: ${self:service}-${sls:stage}-raw
+    PROCESSED_BUCKET: ${self:service}-${sls:stage}-processed
+    DYNAMODB_TABLE: ${self:service}-${sls:stage}-metadata
+    DYNAMODB_CACHE_TABLE: ${self:service}-${sls:stage}-cache
+    SNS_TOPIC_ARN: !Ref AlertTopic
+    STAGE: ${sls:stage}
+    
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - s3:PutObject
+            - s3:GetObject
+            - s3:DeleteObject
+          Resource:
+            - arn:aws:s3:::${self:provider.environment.RAW_BUCKET}/*
+            - arn:aws:s3:::${self:provider.environment.PROCESSED_BUCKET}/*
+        - Effect: Allow
+          Action:
+            - s3:ListBucket
+          Resource:
+            - arn:aws:s3:::${self:provider.environment.RAW_BUCKET}
+            - arn:aws:s3:::${self:provider.environment.PROCESSED_BUCKET}
+        - Effect: Allow
+          Action:
+            - dynamodb:PutItem
+            - dynamodb:GetItem
+            - dynamodb:UpdateItem
+            - dynamodb:Query
+            - dynamodb:Scan
+          Resource:
+            - !GetAtt MetadataTable.Arn
+            - !GetAtt CacheTable.Arn
+            - !Sub "${MetadataTable.Arn}/index/*"
+        - Effect: Allow
+          Action:
+            - sns:Publish
+          Resource:
+            - !Ref AlertTopic
+
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: "*"
+
+functions:
+  upload:
+    handler: handler.upload
+    reservedConcurrency: 500
+    events:
+      - http:
+          path: upload
+          method: post
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Api-Key
+            allowCredentials: false
+          authorizer:
+            name: authorizer
+            resultTtlInSeconds: 300
+    environment:
+      MAX_FILE_SIZE: 10485760
+
+  getData:
+    handler: handler.getData
+    reservedConcurrency: 1000
+    events:
+      - http:
+          path: data/{customerId}
+          method: get
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Api-Key
+            allowCredentials: false
+          authorizer:
+            name: authorizer
+            resultTtlInSeconds: 300
+          request:
+            parameters:
+              paths:
+                customerId: true
+
+  processFile:
+    handler: handler.processFile
+    reservedConcurrency: 200
+    timeout: 300
+    memorySize: 3008
+    events:
+      - s3:
+          bucket: ${self:provider.environment.RAW_BUCKET}
+          event: s3:ObjectCreated:*
+          existing: true
+
+  aggregateDaily:
+    handler: handler.aggregateDaily
+    timeout: 900
+    memorySize: 3008
+    events:
+      - schedule:
+          rate: cron(0 2 * * ? *)
+          enabled: true
+
+  cleanupOldData:
+    handler: handler.cleanupOldData
+    timeout: 900
+    events:
+      - schedule:
+          rate: cron(0 3 * * ? *)
+          enabled: true
+    environment:
+      RETENTION_DAYS: 2555
+
+  authorizer:
+    handler: handler.authorizer
+
+resources:
+  Resources:
+    RawBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:provider.environment.RAW_BUCKET}
+        BucketEncryption:
+          ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
+        LifecycleConfiguration:
+          Rules:
+            - Id: DeleteRawAfter30Days
+              Status: Enabled
+              ExpirationInDays: 30
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+        VersioningConfiguration:
+          Status: Enabled
+        CorsConfiguration:
+          CorsRules:
+            - AllowedOrigins:
+                - '*'
+              AllowedMethods:
+                - PUT
+                - POST
+              AllowedHeaders:
+                - '*'
+              MaxAge: 3000
+
+    ProcessedBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:provider.environment.PROCESSED_BUCKET}
+        BucketEncryption:
+          ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
+        LifecycleConfiguration:
+          Rules:
+            - Id: TransitionToIA
+              Status: Enabled
+              Transitions:
+                - TransitionInDays: 90
+                  StorageClass: STANDARD_IA
+                - TransitionInDays: 180
+                  StorageClass: INTELLIGENT_TIERING
+                - TransitionInDays: 365
+                  StorageClass: GLACIER_IR
+                - TransitionInDays: 730
+                  StorageClass: DEEP_ARCHIVE
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+        VersioningConfiguration:
+          Status: Enabled
+        IntelligentTieringConfigurations:
+          - Id: ArchiveConfig
+            Status: Enabled
+            Tierings:
+              - AccessTier: ARCHIVE_ACCESS
+                Days: 90
+              - AccessTier: DEEP_ARCHIVE_ACCESS
+                Days: 180
+
+    MetadataTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.DYNAMODB_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: true
+        SSESpecification:
+          SSEEnabled: true
+        StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
+        AttributeDefinitions:
+          - AttributeName: customerId
+            AttributeType: S
+          - AttributeName: date
+            AttributeType: S
+          - AttributeName: uploadTimestamp
+            AttributeType: N
+        KeySchema:
+          - AttributeName: customerId
+            KeyType: HASH
+          - AttributeName: date
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: UploadTimestampIndex
+            KeySchema:
+              - AttributeName: customerId
+                KeyType: HASH
+              - AttributeName: uploadTimestamp
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+
+    CacheTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.DYNAMODB_CACHE_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        SSESpecification:
+          SSEEnabled: true
+        AttributeDefinitions:
+          - AttributeName: cacheKey
+            AttributeType: S
+        KeySchema:
+          - AttributeName: cacheKey
+            KeyType: HASH
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+
+    AlertTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: ${self:service}-${sls:stage}-alerts
+        DisplayName: Screen Time API Alerts
+
+    AlertEmailSubscription:
+      Type: AWS::SNS::Subscription
+      Properties:
+        Protocol: email
+        TopicArn: !Ref AlertTopic
+        Endpoint: ${env:ALERT_EMAIL, 'admin@example.com'}
+
+    ApiGatewayRestApi:
+      Type: AWS::ApiGateway::RestApi
+      Properties:
+        EndpointConfiguration:
+          Types:
+            - REGIONAL
+
+    WAFWebACL:
+      Type: AWS::WAFv2::WebACL
+      Properties:
+        Name: ${self:service}-${sls:stage}-waf
+        Scope: REGIONAL
+        DefaultAction:
+          Allow: {}
+        Rules:
+          - Name: RateLimitRule
+            Priority: 1
+            Statement:
+              RateBasedStatement:
+                Limit: 2000
+                AggregateKeyType: IP
+            Action:
+              Block: {}
+            VisibilityConfig:
+              SampledRequestsEnabled: true
+              CloudWatchMetricsEnabled: true
+              MetricName: RateLimitRule
+        VisibilityConfig:
+          SampledRequestsEnabled: true
+          CloudWatchMetricsEnabled: true
+          MetricName: ${self:service}-${sls:stage}-waf
+
+    CloudWatchAlarmHighErrorRate:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: ${self:service}-${sls:stage}-high-error-rate
+        AlarmDescription: Alert when error rate is high
+        MetricName: Errors
+        Namespace: AWS/Lambda
+        Statistic: Sum
+        Period: 300
+        EvaluationPeriods: 2
+        Threshold: 10
+        ComparisonOperator: GreaterThanThreshold
+        AlarmActions:
+          - !Ref AlertTopic
+
+    CloudWatchAlarmHighLatency:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: ${self:service}-${sls:stage}-high-latency
+        AlarmDescription: Alert when latency is high
+        MetricName: Duration
+        Namespace: AWS/Lambda
+        Statistic: Average
+        Period: 300
+        EvaluationPeriods: 2
+        Threshold: 5000
+        ComparisonOperator: GreaterThanThreshold
+        AlarmActions:
+          - !Ref AlertTopic
+
+  Outputs:
+    ApiEndpoint:
+      Description: API Gateway endpoint URL
+      Value: !Sub 'https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${sls:stage}'
+    
+    RawBucketName:
+      Description: Raw data bucket name
+      Value: !Ref RawBucket
+    
+    ProcessedBucketName:
+      Description: Processed data bucket name
+      Value: !Ref ProcessedBucket
+
+plugins:
+  - serverless-offline
+  - serverless-plugin-tracing
