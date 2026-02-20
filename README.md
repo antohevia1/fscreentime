@@ -85,5 +85,5 @@ Supported field names:
 
 - Frontend: React, Vite, Recharts
 - Backend: Node.js, AWS Lambda, Serverless Framework
-- Storage: AWS S3
+- Storage: AWS S3, DDB
 - API: AWS API Gateway
