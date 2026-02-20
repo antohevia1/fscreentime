@@ -14,12 +14,14 @@ A serverless screen time analytics dashboard built with React and AWS Lambda.
 ### Backend
 
 1. Install dependencies:
+
 ```bash
 cd backend
 npm install
 ```
 
 2. Deploy to AWS:
+
 ```bash
 npm run deploy
 ```
@@ -29,11 +31,13 @@ npm run deploy
 ### Frontend
 
 1. Install dependencies:
+
 ```bash
 npm install
 ```
 
 2. Create `.env` file:
+
 ```bash
 cp .env.example .env
 ```
@@ -41,11 +45,13 @@ cp .env.example .env
 3. Update `VITE_API_URL` in `.env` with your API Gateway URL
 
 4. Run development server:
+
 ```bash
 npm run dev
 ```
 
 5. Build for production:
+
 ```bash
 npm run build
 ```
@@ -70,6 +76,7 @@ Your JSON/Parquet files should contain screen time data with fields like:
 ```
 
 Supported field names:
+
 - App: `app`, `application`, `name`
 - Time: `time`, `duration`, `screenTime` (in minutes)
 - Date: `date`, `timestamp`
