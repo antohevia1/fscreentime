@@ -1,7 +1,8 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import Chart from 'react-apexcharts';
 import { parseScreenTimeData } from '../utils/parseData';
 import ContributionsChart from './ContributionsChart';
+import { useAuth } from '../context/AuthContext';
 
 const VIVID = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#A78BFA', '#F97316', '#06B6D4', '#EC4899', '#84CC16', '#F43F5E', '#8B5CF6'];
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -177,7 +178,13 @@ function Dashboard({ data }) {
     };
   }, [filtered, onLegendClick]);
 
-  if (!parsed.length) return <p className="text-muted p-6">No data to display</p>;
+  const { user } = useAuth();
+  if (!parsed.length) return (
+    <DashboardEmpty
+      userName={user?.alias || user?.email?.split('@')[0]}
+      identityId={user?.identityId}
+    />
+  );
 
   const selectClass = 'text-sm border border-border rounded-lg px-3 py-1.5 bg-surface-card text-cream focus:outline-none focus:border-caramel/60';
 
@@ -270,3 +277,215 @@ function Dashboard({ data }) {
 }
 
 export default Dashboard;
+
+function CopyField({ value }) {
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef(null);
+
+  const handleCopy = () => {
+    if (!value) return;
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div className="mt-5 rounded-xl border-2 border-caramel/40 bg-surface overflow-hidden">
+      {/* Label bar */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-caramel/10 border-b border-caramel/20">
+        <span className="text-caramel text-xs">
+          {/* key icon */}
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="7.5" cy="15.5" r="5.5"/>
+            <path d="M21 2l-9.6 9.6M15.5 7.5l3 3"/>
+          </svg>
+        </span>
+        <span className="text-xs font-semibold text-caramel uppercase tracking-wider">
+          Your Identity ID — paste this into the shortcut
+        </span>
+      </div>
+
+      {/* ID + copy button */}
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        <span className="flex-1 font-mono text-xs text-cream truncate select-all">
+          {value ?? 'Loading…'}
+        </span>
+        <button
+          onClick={handleCopy}
+          disabled={!value}
+          className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+            copied
+              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+              : 'bg-caramel/15 text-caramel border border-caramel/30 hover:bg-caramel/25 active:scale-95'
+          }`}
+          aria-label="Copy Identity ID"
+        >
+          {copied ? (
+            <>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              Copied!
+            </>
+          ) : (
+            <>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+              </svg>
+              Copy
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DashboardEmpty({ userName, identityId }) {
+  return (
+    <div className="relative min-h-[78vh] flex flex-col items-center justify-center px-4 py-16 overflow-hidden">
+      {/* Ambient glow */}
+      <div className="pointer-events-none absolute inset-0">
+        <div
+          className="hero-glow bg-caramel absolute"
+          style={{ top: '20%', left: '30%', opacity: 0.09 }}
+        />
+      </div>
+
+      <div className="relative z-10 w-full max-w-3xl">
+
+        {/* Header */}
+        <div className="text-center mb-12">
+          <div className="inline-flex w-16 h-16 rounded-2xl bg-gradient-to-br from-caramel-light to-caramel items-center justify-center mb-6 shadow-lg shadow-caramel/25">
+            <svg width="30" height="30" viewBox="0 0 40 40" fill="none">
+              <path
+                d="M14 10h12M14 30h12M14 10c0 5 6 8 6 10s-6 5-6 10M26 10c0 5-6 8-6 10s6 5 6 10"
+                stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              />
+              <circle cx="20" cy="24" r="2" fill="white" fillOpacity="0.7" />
+            </svg>
+          </div>
+
+          {userName && (
+            <p className="text-xs uppercase tracking-[0.2em] text-caramel/70 mb-3">
+              Welcome, {userName}
+            </p>
+          )}
+          <h2 className="text-3xl md:text-4xl font-bold text-cream mb-3 leading-tight">
+            Your dashboard is ready.
+            <br />
+            <span className="bg-gradient-to-r from-caramel via-accent to-caramel-light bg-clip-text text-transparent">
+              Let's get you connected.
+            </span>
+          </h2>
+          <p className="text-muted max-w-sm mx-auto text-sm leading-relaxed">
+            Three quick steps on your iPhone and your data will start flowing in.
+          </p>
+        </div>
+
+        {/* Step cards */}
+        <div className="relative grid md:grid-cols-3 gap-5 mb-10">
+          {/* Connector line desktop */}
+          <div className="hidden md:block absolute top-[3.75rem] left-[calc(16.67%+1.25rem)] right-[calc(16.67%+1.25rem)] h-px bg-gradient-to-r from-border via-caramel/30 to-border z-0" />
+
+          {/* Step 01 */}
+          <div className="relative bg-surface-card rounded-2xl p-7 border border-border hover:border-caramel/30 transition-all duration-300 hover:shadow-lg hover:shadow-caramel/5 hover:-translate-y-0.5 z-10">
+            <span className="text-xs font-mono text-caramel/50 mb-4 block">01</span>
+            <div className="mb-5">
+              <a
+                href="https://apps.apple.com/app/shortcuts/id915249334"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block hover:scale-105 transition-transform"
+              >
+                <div className="w-14 h-14 rounded-[18px] shadow-xl shadow-[#EF3E56]/20 overflow-hidden">
+                  <img src="/shortcuss.webp" alt="Shortcuts app" className="w-full h-full object-cover" />
+                </div>
+              </a>
+            </div>
+            <h3 className="text-base font-semibold text-cream mb-2">Install Shortcuts</h3>
+            <p className="text-sm text-muted leading-relaxed">
+              Download{' '}
+              <a
+                href="https://apps.apple.com/app/shortcuts/id915249334"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-caramel hover:underline"
+              >
+                Shortcuts
+              </a>{' '}
+              from the App Store. Pre-installed on iOS&nbsp;13+.
+            </p>
+          </div>
+
+          {/* Step 02 */}
+          <div className="relative bg-surface-card rounded-2xl p-7 border border-border hover:border-caramel/30 transition-all duration-300 hover:shadow-lg hover:shadow-caramel/5 hover:-translate-y-0.5 z-10">
+            <span className="text-xs font-mono text-caramel/50 mb-4 block">02</span>
+            <div className="mb-5">
+              <div
+                className="w-14 h-14 rounded-[18px] shadow-xl shadow-caramel/20 flex items-center justify-center relative overflow-hidden"
+                style={{
+                  background: 'linear-gradient(135deg, #d4aa80 0%, #c4956a 40%, #b07d52 100%)',
+                  transform: 'perspective(400px) rotateY(12deg) rotateX(6deg)',
+                }}
+              >
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                </svg>
+                <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-[18px]" />
+              </div>
+            </div>
+            <h3 className="text-base font-semibold text-cream mb-2">Add Our Automation</h3>
+            <p className="text-sm text-muted leading-relaxed">
+              Tap to install our shortcut. It runs daily and syncs your screen time automatically.
+            </p>
+          </div>
+
+          {/* Step 03 — identity ID card (highlighted) */}
+          <div className="relative bg-surface-card rounded-2xl p-7 border-2 border-caramel/40 shadow-lg shadow-caramel/10 z-10">
+            {/* "Do this now" badge */}
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-caramel text-surface text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full shadow-md shadow-caramel/30">
+              <span className="w-1.5 h-1.5 rounded-full bg-surface animate-pulse" />
+              Do this now
+            </div>
+
+            <span className="text-xs font-mono text-caramel/50 mb-4 block mt-1">03</span>
+            <div className="mb-5">
+              <div
+                className="w-14 h-14 rounded-[18px] shadow-xl shadow-[#A78BFA]/20 flex items-center justify-center relative overflow-hidden"
+                style={{
+                  background: 'linear-gradient(135deg, #c4b5fd 0%, #A78BFA 40%, #7C5FD3 100%)',
+                  transform: 'perspective(400px) rotateY(-12deg) rotateX(6deg)',
+                }}
+              >
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+                <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-[18px]" />
+              </div>
+            </div>
+            <h3 className="text-base font-semibold text-cream mb-2">Enter Your Identity ID</h3>
+            <p className="text-sm text-muted leading-relaxed">
+              When the shortcut runs for the first time it will ask for your ID. Copy yours below and paste it in.
+            </p>
+
+            <CopyField value={identityId} />
+          </div>
+        </div>
+
+        {/* 24 h notice */}
+        <div className="flex items-center gap-4 bg-surface-card border border-caramel/20 rounded-2xl px-6 py-4 max-w-lg mx-auto">
+          <span className="text-2xl shrink-0">⏳</span>
+          <p className="text-sm text-muted leading-relaxed">
+            <span className="text-cream font-semibold">Please allow at least 24 hours</span> after your first shortcut run for your data to appear here.
+          </p>
+        </div>
+
+      </div>
+    </div>
+  );
+}
