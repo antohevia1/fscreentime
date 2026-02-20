@@ -37,7 +37,7 @@ const TESTIMONIALS = [
   },
   {
     name: "Luna C.",
-    text: "Seeing my name on the leaderboard keeps me accountable every single day.",
+    text: "The daily heatmap makes patterns so obvious. I can spot my worst days instantly and course-correct.",
     saved: "11h/week",
   },
 ];
@@ -91,7 +91,7 @@ export default function Landing() {
               define who you become.
             </span>
           </h1>
-          <p className="text-lg md:text-xl text-muted max-w-2xl mx-auto mb-12 leading-relaxed animate-fade-up-delay-2">
+          <p className="text-lg md:text-xl text-muted max-w-2xl mx-auto mb-12 leading-relaxed animate-fade-up-delay-2 text-readable">
             Every minute on a screen is a minute not spent living. See the
             truth. Set a boundary. Put real stakes behind it.
           </p>
@@ -109,7 +109,7 @@ export default function Landing() {
               See How It Works
             </a>
           </div>
-          <p className="mt-8 text-sm text-muted animate-fade-up-delay-3">
+          <p className="mt-8 text-sm text-muted animate-fade-up-delay-3 text-readable">
             <span className="text-caramel">1,247 people</span> started their
             challenge this week
           </p>
@@ -129,9 +129,9 @@ export default function Landing() {
                 "🎯 Luna completed her weekly challenge",
                 "⚡ 847 hours reclaimed today globally",
                 "💪 Tom is on a 14 day streak",
-                "🌟 Jess just joined the leaderboard",
+                "🌟 Jess hit her personal best this week",
               ].map((t, i) => (
-                <span key={i} className="text-sm text-muted/70">
+                <span key={i} className="text-sm text-muted">
                   {t}
                 </span>
               ))}
@@ -649,7 +649,7 @@ export default function Landing() {
               },
               {
                 q: "What happens to my data?",
-                a: "Your data is encrypted in transit and at rest. We never sell or commercially use your data. Only you can see your screen time unless you opt into the community leaderboard.",
+                a: "Your data is encrypted in transit and at rest. We never sell or commercially use your data. Only you can see your screen time.",
               },
               {
                 q: "Does it work on Android?",

@@ -31,8 +31,8 @@ module.exports = {
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
         pulseSoft: {
-          '0%, 100%': { opacity: '0.4' },
-          '50%': { opacity: '1' },
+          '0%, 100%': { opacity: '0.07' },
+          '50%': { opacity: '0.18' },
         },
         float: {
           '0%, 100%': { transform: 'translateY(0)' },

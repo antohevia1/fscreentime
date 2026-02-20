@@ -20,6 +20,11 @@ body {
   pointer-events: none;
 }
 
+/* Text over glow — reinforces dark background behind letters */
+.text-readable {
+  text-shadow: 0 0 18px rgba(26, 23, 20, 0.95), 0 0 6px rgba(26, 23, 20, 0.8);
+}
+
 /* Ticker */
 @keyframes ticker {
   0% { transform: translateX(0); }
