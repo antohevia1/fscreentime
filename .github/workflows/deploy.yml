@@ -18,45 +18,8 @@ env:
   PROD_DOMAIN: fscreentime.app
 
 jobs:
-  deploy-backend:
-    name: Deploy Backend
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 18
-          cache: npm
-          cache-dependency-path: backend/package-lock.json
-
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Install dependencies
-        working-directory: backend
-        run: npm ci
-
-      - name: Deploy
-        working-directory: backend
-        run: npx serverless deploy --stage prod
-        env:
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          FACEBOOK_APP_ID: ${{ secrets.FACEBOOK_APP_ID }}
-          FACEBOOK_APP_SECRET: ${{ secrets.FACEBOOK_APP_SECRET }}
-          COGNITO_DOMAIN_SUFFIX: ${{ secrets.COGNITO_DOMAIN_SUFFIX }}
-          INGEST_API_KEY: ${{ secrets.INGEST_API_KEY }}
-          CALLBACK_URL: https://${{ env.PROD_DOMAIN }}/app
-          LOGOUT_URL: https://${{ env.PROD_DOMAIN }}/
-          DOMAIN_NAME: ${{ env.PROD_DOMAIN }}
-          ACM_CERTIFICATE_ARN: ${{ secrets.ACM_CERTIFICATE_ARN }}
-
   deploy-frontend:
     name: Deploy Frontend
-    needs: deploy-backend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
