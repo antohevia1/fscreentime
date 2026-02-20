@@ -155,7 +155,7 @@ export default function Landing() {
             >
               <p className="text-3xl md:text-4xl font-bold text-cream">
                 {s.value}
-                <span className="text-caramel text-xl ml-1">{s.unit}</span>
+                <span className="text-caramel text-xl block md:inline md:ml-1">{s.unit}</span>
               </p>
               <p className="text-sm text-muted mt-2">{s.label}</p>
             </div>
