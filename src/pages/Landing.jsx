@@ -212,8 +212,8 @@ export default function Landing() {
                   <p className="text-xs text-muted mb-3">Top Apps</p>
                   <div className="space-y-2">
                     {[
-                      { name: "Chrome", w: "85%", color: "#FF6B6B" },
-                      { name: "VS Code", w: "72%", color: "#4ECDC4" },
+                      { name: "Instagram", w: "85%", color: "#FF6B6B" },
+                      { name: "WhatsApp", w: "72%", color: "#4ECDC4" },
                       { name: "Slack", w: "45%", color: "#FFE66D" },
                       { name: "Spotify", w: "30%", color: "#A78BFA" },
                     ].map((app, i) => (
