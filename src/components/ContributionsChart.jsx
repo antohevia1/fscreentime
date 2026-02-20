@@ -56,9 +56,9 @@ function ContributionsChart({ data }) {
   if (!weeks.length) return null;
 
   return (
-    <div className="bg-surface-card border border-border rounded-xl p-5 relative">
+    <div className="bg-surface-card border border-border rounded-xl p-5 relative overflow-hidden">
       <h3 className="text-sm font-medium text-cream mb-3">Daily Activity</h3>
-      <div className="flex gap-[3px] overflow-x-auto">
+      <div className="flex gap-[3px] overflow-hidden">
         <div className="flex flex-col gap-[3px] pt-5 pr-1 shrink-0">
           {DAY_LABELS.map((d, i) => (
             <span key={i} className="text-[10px] text-muted h-[13px] leading-[13px] text-right">{d}</span>

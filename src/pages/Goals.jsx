@@ -1,10 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import Chart from 'react-apexcharts';
 import { parseScreenTimeData } from '../utils/parseData';
 
 const CHARITIES = [
-  'Red Cross', 'Doctors Without Borders', 'UNICEF', 'World Wildlife Fund',
-  'Habitat for Humanity', 'Feeding America', "St. Jude Children's Hospital",
+  { id: 'redcross', name: 'Red Cross', emoji: '🏥', desc: 'Disaster relief and humanitarian aid worldwide' },
+  { id: 'msf', name: 'Doctors Without Borders', emoji: '⚕️', desc: 'Medical care in conflict zones and emergencies' },
+  { id: 'unicef', name: 'UNICEF', emoji: '🧒', desc: 'Protecting children and their rights globally' },
+  { id: 'wwf', name: 'World Wildlife Fund', emoji: '🐼', desc: 'Conservation of nature and endangered species' },
+  { id: 'habitat', name: 'Habitat for Humanity', emoji: '🏠', desc: 'Building homes for families in need' },
+  { id: 'feeding', name: 'Feeding America', emoji: '🍎', desc: 'Fighting hunger across the United States' },
+  { id: 'stjude', name: "St. Jude Children's Hospital", emoji: '💛', desc: 'Pediatric treatment and research' },
 ];
 
 const VIVID = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#A78BFA', '#F97316', '#06B6D4', '#EC4899'];
@@ -16,19 +21,38 @@ const darkChart = {
   tooltip: { theme: 'dark' },
 };
 
-function formatDate(iso) {
-  return new Date(iso).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' });
+function fmtDate(iso) {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function getWeekRange() {
+function toDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Challenge runs Mon→Sun. Start = tomorrow (or next Monday if today is Sunday).
+// End = the following Sunday.
+function getChallengeRange() {
   const now = new Date();
-  const day = now.getDay();
-  const start = new Date(now);
-  start.setDate(now.getDate() - day);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-  return { start, end, startStr: start.toISOString().split('T')[0], endStr: end.toISOString().split('T')[0] };
+  const today = now.getDay(); // 0=Sun
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+
+  let start, end;
+  if (today === 0) {
+    // Today is Sunday: start next Monday
+    start = new Date(now);
+    start.setDate(now.getDate() + 1);
+  } else {
+    // Start tomorrow
+    start = tomorrow;
+  }
+  // End = next Sunday (day 0)
+  end = new Date(start);
+  const daysUntilSunday = (7 - start.getDay()) % 7;
+  end.setDate(start.getDate() + (daysUntilSunday === 0 ? 6 : daysUntilSunday));
+
+  const numDays = Math.round((end - start) / 86400000) + 1;
+  return { startStr: toDateStr(start), endStr: toDateStr(end), numDays };
 }
 
 export default function Goals({ data }) {
@@ -38,15 +62,26 @@ export default function Goals({ data }) {
   });
 
   const [dailyLimit, setDailyLimit] = useState(2);
-  const [charity, setCharity] = useState(CHARITIES[0]);
+  const [selectedCharity, setSelectedCharity] = useState('redcross');
+  const [showInfo, setShowInfo] = useState(false);
+  const charityRef = useRef(null);
+
+  const range = getChallengeRange();
+  const weeklyBudget = +(dailyLimit * range.numDays).toFixed(1);
 
   const saveGoal = (e) => {
     e.preventDefault();
-    const week = getWeekRange();
+    const charity = CHARITIES.find(c => c.id === selectedCharity);
     const g = {
-      dailyLimit, weeklyLimit: dailyLimit * 7, charity, amount: 5,
+      dailyLimit,
+      weeklyLimit: weeklyBudget,
+      charity: charity.name,
+      charityId: charity.id,
+      amount: 5,
       createdAt: new Date().toISOString(),
-      weekStart: week.startStr, weekEnd: week.endStr,
+      weekStart: range.startStr,
+      weekEnd: range.endStr,
+      numDays: range.numDays,
     };
     localStorage.setItem('st_goal', JSON.stringify(g));
     setGoal(g);
@@ -55,19 +90,35 @@ export default function Goals({ data }) {
   const clearGoal = () => { localStorage.removeItem('st_goal'); setGoal(null); };
 
   if (!goal) {
-    const week = getWeekRange();
     return (
       <div className="flex items-center justify-center min-h-[70vh]">
-        <div className="bg-surface-card border border-border rounded-xl p-8 max-w-md w-full">
+        <div className="bg-surface-card border border-border rounded-xl p-8 max-w-lg w-full">
           <h2 className="text-xl font-semibold text-cream mb-2">Set Your Weekly Challenge</h2>
           <p className="text-sm text-muted mb-6 leading-relaxed">
-            Choose a daily screen time limit. You will have a weekly budget of <span className="text-caramel">{dailyLimit * 7}h</span>.
-            Miss it, and your $5 goes to charity. Beat it, and you keep your time and your money.
+            Choose a daily screen time limit. Your budget for this period is <span className="text-caramel">{weeklyBudget}h</span> ({range.numDays} days).
+            Miss it, and your $5 goes to charity.
           </p>
-          <div className="bg-surface-light rounded-lg p-3 border border-border mb-5 text-center">
-            <p className="text-xs text-muted uppercase tracking-wide">Challenge period</p>
-            <p className="text-sm text-cream mt-1">{formatDate(week.startStr)} → {formatDate(week.endStr)}</p>
+
+          {/* Challenge period */}
+          <div className="bg-surface-light rounded-lg p-3 border border-border mb-5 flex items-center justify-center gap-2">
+            <div className="text-center flex-1">
+              <p className="text-xs text-muted uppercase tracking-wide">Challenge period</p>
+              <p className="text-sm text-cream mt-1">{fmtDate(range.startStr)} → {fmtDate(range.endStr)}</p>
+              <p className="text-xs text-muted mt-0.5">{range.numDays} days</p>
+            </div>
+            <button type="button" onClick={() => setShowInfo(!showInfo)}
+              className="w-6 h-6 rounded-full border border-border text-muted hover:text-cream hover:border-caramel/40 text-xs flex items-center justify-center shrink-0 transition"
+              aria-label="Challenge info">?</button>
           </div>
+          {showInfo && (
+            <div className="bg-surface rounded-lg p-4 border border-border mb-5 text-sm text-muted leading-relaxed space-y-2">
+              <p>Challenges follow a <span className="text-cream">Monday to Sunday</span> weekly cycle.</p>
+              <p>Goal compliance is checked on Monday after the challenge week ends.</p>
+              <p>If you start mid week, tracking begins the next day and your budget is prorated. For example, with a 2h daily limit and 5 days remaining, your target is 10h.</p>
+              <p>Goals set on Sunday start the following Monday for a full 7 day week.</p>
+            </div>
+          )}
+
           <form onSubmit={saveGoal} className="space-y-5">
             <div>
               <label className="text-xs uppercase tracking-wide text-muted block mb-2">Daily limit (hours)</label>
@@ -79,18 +130,41 @@ export default function Goals({ data }) {
                 <span className="text-caramel font-semibold text-lg">{dailyLimit}h / day</span>
                 <span className="text-muted">8h</span>
               </div>
-              <p className="text-center text-sm text-muted mt-1">Weekly budget: <span className="text-cream">{dailyLimit * 7}h</span></p>
+              <p className="text-center text-sm text-muted mt-1">Period budget: <span className="text-cream">{weeklyBudget}h</span></p>
             </div>
+
+            {/* Charity cards with arrows */}
             <div>
-              <label className="text-xs uppercase tracking-wide text-muted block mb-2">Charity</label>
-              <select value={charity} onChange={e => setCharity(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg bg-surface-light border border-border text-cream text-sm focus:outline-none focus:border-caramel/60">
-                {CHARITIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+              <label className="text-xs uppercase tracking-wide text-muted block mb-3">Choose a charity</label>
+              <div className="relative">
+                <button type="button" onClick={() => charityRef.current?.scrollBy({ left: -152, behavior: 'smooth' })}
+                  className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-10 w-7 h-7 rounded-full bg-surface-card border border-border text-muted hover:text-cream hover:border-caramel/40 flex items-center justify-center text-sm transition">‹</button>
+                <div ref={charityRef} className="flex gap-3 overflow-x-auto pb-2 px-1 scroll-smooth" style={{ scrollbarWidth: 'none' }}>
+                  {CHARITIES.map(c => (
+                    <button type="button" key={c.id} onClick={() => setSelectedCharity(c.id)}
+                      className={`shrink-0 w-36 rounded-xl p-4 border text-left transition ${
+                        selectedCharity === c.id
+                          ? 'border-caramel bg-surface-hover'
+                          : 'border-border bg-surface-light hover:border-caramel/30'
+                      }`}>
+                      <span className="text-2xl block mb-2">{c.emoji}</span>
+                      <p className="text-xs font-semibold text-cream leading-tight">{c.name}</p>
+                      <p className="text-[10px] text-muted mt-1 leading-snug">{c.desc}</p>
+                    </button>
+                  ))}
+                </div>
+                <button type="button" onClick={() => charityRef.current?.scrollBy({ left: 152, behavior: 'smooth' })}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-10 w-7 h-7 rounded-full bg-surface-card border border-border text-muted hover:text-cream hover:border-caramel/40 flex items-center justify-center text-sm transition">›</button>
+              </div>
             </div>
-            <div className="bg-surface-light rounded-lg p-4 border border-border">
-              <p className="text-sm text-muted">If you exceed <span className="text-cream">{dailyLimit * 7}h</span> this week:</p>
-              <p className="text-caramel font-semibold mt-1">$5.00 → {charity}</p>
+
+            <div className="bg-surface-light rounded-lg p-4 border border-border space-y-2">
+              <p className="text-sm text-muted">If you exceed <span className="text-cream">{weeklyBudget}h</span> this period:</p>
+              <p className="text-caramel font-semibold">$5.00 → {CHARITIES.find(c => c.id === selectedCharity)?.name}</p>
+              <div className="flex gap-4 text-xs text-muted pt-1 border-t border-border/50">
+                <span>Donation: <span className="text-cream">$4.50</span></span>
+                <span>Service fee (10%): <span className="text-cream">$0.50</span></span>
+              </div>
             </div>
             <button type="submit"
               className="w-full py-3 rounded-lg bg-caramel text-surface font-semibold text-sm hover:bg-caramel-light transition">
@@ -109,9 +183,9 @@ function GoalProgress({ goal, data, onClear }) {
   const parsed = useMemo(() => data ? parseScreenTimeData(data) : [], [data]);
 
   const stats = useMemo(() => {
-    const week = getWeekRange();
-    const weekStart = goal.weekStart || week.startStr;
-    const weekEnd = goal.weekEnd || week.endStr;
+    const r = getChallengeRange();
+    const weekStart = goal.weekStart || r.startStr;
+    const weekEnd = goal.weekEnd || r.endStr;
     const weekData = parsed.filter(d => d.date >= weekStart && d.date <= weekEnd);
     const weekMinutes = weekData.reduce((s, d) => s + d.minutes, 0);
     const weekHours = weekMinutes / 60;
@@ -121,13 +195,12 @@ function GoalProgress({ goal, data, onClear }) {
     const pct = Math.min(100, (weekHours / goalHours) * 100);
     const onTrack = weekHours <= goalHours;
 
-    // Build all 7 days of the week
+    const numDays = goal.numDays || 7;
     const daily = [];
-    const weekStartStr = goal.weekStart || new Date(goal.createdAt).toISOString().split('T')[0];
-    const [y, m, day0] = weekStartStr.split('-').map(Number);
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(y, m - 1, day0 + i);
-      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const [y, m, d0] = weekStart.split('-').map(Number);
+    for (let i = 0; i < numDays; i++) {
+      const d = new Date(y, m - 1, d0 + i);
+      const dateStr = toDateStr(d);
       const dayMin = weekData.filter(e => e.date === dateStr).reduce((s, e) => s + e.minutes, 0);
       daily.push({ date: dateStr, hours: +(dayMin / 60).toFixed(2), limit: goal.dailyLimit });
     }
@@ -168,7 +241,7 @@ function GoalProgress({ goal, data, onClear }) {
     options: {
       ...darkChart,
       chart: { ...darkChart.chart, type: 'bar' },
-      xaxis: { categories: stats.daily.map(d => new Date(d.date).toLocaleDateString('en', { weekday: 'short', month: 'short', day: 'numeric' })) },
+      xaxis: { categories: stats.daily.map(d => new Date(d.date + 'T00:00:00').toLocaleDateString('en', { weekday: 'short', month: 'short', day: 'numeric' })) },
       yaxis: { title: { text: 'Hours', style: { color: '#9a8e80' } } },
       colors: ['#4ECDC4', '#3e3830'],
       plotOptions: { bar: { columnWidth: '55%', borderRadius: 3 } },
@@ -190,15 +263,17 @@ function GoalProgress({ goal, data, onClear }) {
     },
   };
 
+  const hasData = stats.weekHours > 0;
+
   return (
     <div className="space-y-5">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold text-cream">Weekly Challenge</h2>
           <p className="text-sm text-muted mt-1">
-            {formatDate(goal.weekStart)} → {formatDate(goal.weekEnd)} · {goal.dailyLimit}h/day · {goal.weeklyLimit}h/week · $5 → {goal.charity}
+            {fmtDate(goal.weekStart)} → {fmtDate(goal.weekEnd)} · {goal.numDays || 7} days · {goal.dailyLimit}h/day · {goal.weeklyLimit}h total · $5 → {goal.charity}
           </p>
+          <p className="text-xs text-muted mt-0.5">Donation: $4.50 · Service fee (10%): $0.50</p>
         </div>
         <button onClick={onClear}
           className="text-xs text-muted hover:text-cream border border-border rounded-lg px-3 py-1.5 hover:border-caramel/40 transition">
@@ -206,7 +281,18 @@ function GoalProgress({ goal, data, onClear }) {
         </button>
       </div>
 
-      {/* Status cards */}
+      {!hasData && (
+        <div className="bg-surface-card border border-border rounded-2xl p-10 text-center">
+          <span className="text-5xl block mb-4">🚀</span>
+          <h3 className="text-xl font-semibold text-cream mb-2">Challenge accepted!</h3>
+          <p className="text-sm text-muted max-w-sm mx-auto leading-relaxed">
+            Your tracking starts <span className="text-caramel">{fmtDate(goal.weekStart)}</span>.
+            Come back tomorrow to see your first stats. In the meantime, enjoy your screen free evening.
+          </p>
+        </div>
+      )}
+
+      {hasData && <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: 'Used', value: `${stats.weekHours.toFixed(1)}h`, color: 'text-cream' },
@@ -221,7 +307,6 @@ function GoalProgress({ goal, data, onClear }) {
         ))}
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="bg-surface-card border border-border rounded-xl p-5 flex flex-col items-center justify-center">
           <h3 className="text-sm font-medium text-cream mb-2 self-start">Progress</h3>
@@ -237,6 +322,7 @@ function GoalProgress({ goal, data, onClear }) {
         <h3 className="text-sm font-medium text-cream mb-2">This Week by App</h3>
         <Chart options={donutChart.options} series={donutChart.series} type="donut" height={300} />
       </div>
+      </>}
     </div>
   );
 }

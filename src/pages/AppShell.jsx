@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Dashboard from '../components/Dashboard';
+import { LogoText } from '../components/Logo';
 import Goals from './Goals';
 import Ranking from './Ranking';
+import { fetchScreenTimeData } from '../utils/s3Data';
 
 const navItems = [
   { to: '/app/dashboard', label: 'Dashboard', icon: '◫' },
@@ -18,11 +20,14 @@ export default function AppShell() {
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
-    fetch('/sample-data.json')
-      .then(r => r.json())
+    if (!user?.credentials || !user?.identityId) return;
+    fetchScreenTimeData(user.credentials, user.identityId)
       .then(setData)
-      .catch(() => {});
-  }, []);
+      .catch(() => {
+        // Fallback to sample data during development
+        fetch('/sample-data.json').then(r => r.json()).then(setData).catch(() => {});
+      });
+  }, [user]);
 
   const handleSignOut = () => { signOut(); navigate('/'); };
 
@@ -31,7 +36,7 @@ export default function AppShell() {
       {/* Sidebar */}
       <aside className={`${collapsed ? 'w-16' : 'w-52'} shrink-0 bg-surface-light border-r border-border flex flex-col transition-all duration-200`}>
         <div className="px-4 py-5 flex items-center justify-between">
-          {!collapsed && <span className="text-sm font-semibold text-caramel tracking-tight">screentime</span>}
+          {!collapsed && <LogoText size={24} />}
           <button onClick={() => setCollapsed(!collapsed)}
             className="text-muted hover:text-cream text-xs ml-auto" aria-label="Toggle sidebar">
             {collapsed ? '▸' : '◂'}

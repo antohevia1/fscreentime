@@ -1,350 +1,403 @@
 service: screen-time-api
 
+useDotenv: true
+
+custom:
+  domainName: ${env:DOMAIN_NAME, 'fscreentime.app'}
+  certificateArn: ${env:ACM_CERTIFICATE_ARN, ''}
+  websiteBucket: ${self:service}-${sls:stage}-website
+
 provider:
   name: aws
   runtime: nodejs18.x
   region: us-east-1
   stage: ${opt:stage, 'dev'}
-  memorySize: 1024
-  timeout: 30
-  logRetentionInDays: 30
-  
+  memorySize: 256
+  timeout: 10
   environment:
-    RAW_BUCKET: ${self:service}-${sls:stage}-raw
-    PROCESSED_BUCKET: ${self:service}-${sls:stage}-processed
-    DYNAMODB_TABLE: ${self:service}-${sls:stage}-metadata
-    DYNAMODB_CACHE_TABLE: ${self:service}-${sls:stage}-cache
-    SNS_TOPIC_ARN: !Ref AlertTopic
+    DYNAMODB_GOALS_TABLE: ${self:service}-${sls:stage}-goals
+    DATA_BUCKET: ${self:service}-${sls:stage}-data
     STAGE: ${sls:stage}
-    
+  httpApi:
+    cors: true
+    authorizers:
+      cognitoAuthorizer:
+        type: jwt
+        identitySource: $request.header.Authorization
+        issuerUrl: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}'
+        audience:
+          - !Ref CognitoUserPoolClient
   iam:
     role:
       statements:
         - Effect: Allow
           Action:
-            - s3:PutObject
-            - s3:GetObject
-            - s3:DeleteObject
-          Resource:
-            - arn:aws:s3:::${self:provider.environment.RAW_BUCKET}/*
-            - arn:aws:s3:::${self:provider.environment.PROCESSED_BUCKET}/*
-        - Effect: Allow
-          Action:
-            - s3:ListBucket
-          Resource:
-            - arn:aws:s3:::${self:provider.environment.RAW_BUCKET}
-            - arn:aws:s3:::${self:provider.environment.PROCESSED_BUCKET}
-        - Effect: Allow
-          Action:
             - dynamodb:PutItem
-            - dynamodb:GetItem
-            - dynamodb:UpdateItem
             - dynamodb:Query
-            - dynamodb:Scan
           Resource:
-            - !GetAtt MetadataTable.Arn
-            - !GetAtt CacheTable.Arn
-            - !Sub "${MetadataTable.Arn}/index/*"
+            - !GetAtt GoalsTable.Arn
         - Effect: Allow
           Action:
-            - sns:Publish
+            - s3:PutObject
           Resource:
-            - !Ref AlertTopic
-
-        - Effect: Allow
-          Action:
-            - logs:CreateLogGroup
-            - logs:CreateLogStream
-            - logs:PutLogEvents
-          Resource: "*"
+            - !Sub 'arn:aws:s3:::${self:provider.environment.DATA_BUCKET}/*'
 
 functions:
-  upload:
-    handler: handler.upload
-    reservedConcurrency: 500
+  # Public endpoint — phone devices post screen time here
+  ingest:
+    handler: handler.ingest
     events:
-      - http:
-          path: upload
+      - httpApi:
+          path: /ingest
           method: post
-          cors:
-            origin: '*'
-            headers:
-              - Content-Type
-              - Authorization
-              - X-Api-Key
-            allowCredentials: false
-          authorizer:
-            name: authorizer
-            resultTtlInSeconds: 300
     environment:
-      MAX_FILE_SIZE: 10485760
+      API_KEY: ${env:INGEST_API_KEY, 'REPLACE_ME'}
 
-  getData:
-    handler: handler.getData
-    reservedConcurrency: 1000
+  # Authenticated endpoints (goals only — data reads go direct to S3)
+  saveGoal:
+    handler: handler.saveGoal
     events:
-      - http:
-          path: data/{customerId}
+      - httpApi:
+          path: /goals
+          method: post
+          authorizer:
+            name: cognitoAuthorizer
+
+  getGoal:
+    handler: handler.getGoal
+    events:
+      - httpApi:
+          path: /goals
           method: get
-          cors:
-            origin: '*'
-            headers:
-              - Content-Type
-              - Authorization
-              - X-Api-Key
-            allowCredentials: false
           authorizer:
-            name: authorizer
-            resultTtlInSeconds: 300
-          request:
-            parameters:
-              paths:
-                customerId: true
-
-  processFile:
-    handler: handler.processFile
-    reservedConcurrency: 200
-    timeout: 300
-    memorySize: 3008
-    events:
-      - s3:
-          bucket: ${self:provider.environment.RAW_BUCKET}
-          event: s3:ObjectCreated:*
-          existing: true
-
-  aggregateDaily:
-    handler: handler.aggregateDaily
-    timeout: 900
-    memorySize: 3008
-    events:
-      - schedule:
-          rate: cron(0 2 * * ? *)
-          enabled: true
-
-  cleanupOldData:
-    handler: handler.cleanupOldData
-    timeout: 900
-    events:
-      - schedule:
-          rate: cron(0 3 * * ? *)
-          enabled: true
-    environment:
-      RETENTION_DAYS: 2555
-
-  authorizer:
-    handler: handler.authorizer
+            name: cognitoAuthorizer
 
 resources:
+  Conditions:
+    IsProduction:
+      !Equals ['${sls:stage}', 'prod']
+
   Resources:
-    RawBucket:
+    # ── Cognito User Pool ────────────────────────────────────
+    CognitoUserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: ${self:service}-${sls:stage}-users
+        AutoVerifiedAttributes:
+          - email
+        UsernameAttributes:
+          - email
+        Schema:
+          - Name: email
+            Required: true
+            Mutable: true
+          - Name: preferred_username
+            Required: false
+            Mutable: true
+        Policies:
+          PasswordPolicy:
+            MinimumLength: 8
+            RequireUppercase: false
+            RequireLowercase: false
+            RequireNumbers: false
+            RequireSymbols: false
+        AccountRecoverySetting:
+          RecoveryMechanisms:
+            - Name: verified_email
+              Priority: 1
+
+    CognitoUserPoolDomain:
+      Type: AWS::Cognito::UserPoolDomain
+      Properties:
+        Domain: ${self:service}-${sls:stage}-${env:COGNITO_DOMAIN_SUFFIX, 'app'}
+        UserPoolId: !Ref CognitoUserPool
+
+    GoogleIdentityProvider:
+      Type: AWS::Cognito::UserPoolIdentityProvider
+      Properties:
+        UserPoolId: !Ref CognitoUserPool
+        ProviderName: Google
+        ProviderType: Google
+        ProviderDetails:
+          client_id: ${env:GOOGLE_CLIENT_ID, 'REPLACE_ME'}
+          client_secret: ${env:GOOGLE_CLIENT_SECRET, 'REPLACE_ME'}
+          authorize_scopes: 'openid email profile'
+        AttributeMapping:
+          email: email
+          username: sub
+          preferred_username: name
+
+    FacebookIdentityProvider:
+      Type: AWS::Cognito::UserPoolIdentityProvider
+      Properties:
+        UserPoolId: !Ref CognitoUserPool
+        ProviderName: Facebook
+        ProviderType: Facebook
+        ProviderDetails:
+          client_id: ${env:FACEBOOK_APP_ID, 'REPLACE_ME'}
+          client_secret: ${env:FACEBOOK_APP_SECRET, 'REPLACE_ME'}
+          authorize_scopes: 'public_profile,email'
+        AttributeMapping:
+          email: email
+          username: id
+          preferred_username: name
+
+    CognitoUserPoolClient:
+      Type: AWS::Cognito::UserPoolClient
+      DependsOn:
+        - GoogleIdentityProvider
+        - FacebookIdentityProvider
+      Properties:
+        ClientName: ${self:service}-${sls:stage}-client
+        UserPoolId: !Ref CognitoUserPool
+        GenerateSecret: false
+        ExplicitAuthFlows:
+          - ALLOW_USER_SRP_AUTH
+          - ALLOW_REFRESH_TOKEN_AUTH
+        SupportedIdentityProviders:
+          - COGNITO
+          - Google
+          - Facebook
+        AllowedOAuthFlows:
+          - code
+        AllowedOAuthScopes:
+          - openid
+          - email
+          - profile
+        AllowedOAuthFlowsUserPoolClient: true
+        CallbackURLs:
+          - ${env:CALLBACK_URL, 'http://localhost:5173/app'}
+        LogoutURLs:
+          - ${env:LOGOUT_URL, 'http://localhost:5173/'}
+
+    # ── Cognito Identity Pool (for direct S3 access) ────────
+    CognitoIdentityPool:
+      Type: AWS::Cognito::IdentityPool
+      Properties:
+        IdentityPoolName: ${self:service}-${sls:stage}-identity
+        AllowUnauthenticatedIdentities: false
+        CognitoIdentityProviders:
+          - ClientId: !Ref CognitoUserPoolClient
+            ProviderName: !GetAtt CognitoUserPool.ProviderName
+
+    CognitoIdentityPoolRoleAttachment:
+      Type: AWS::Cognito::IdentityPoolRoleAttachment
+      Properties:
+        IdentityPoolId: !Ref CognitoIdentityPool
+        Roles:
+          authenticated: !GetAtt CognitoAuthRole.Arn
+
+    CognitoAuthRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Federated: cognito-identity.amazonaws.com
+              Action: sts:AssumeRoleWithWebIdentity
+              Condition:
+                StringEquals:
+                  'cognito-identity.amazonaws.com:aud': !Ref CognitoIdentityPool
+                'ForAnyValue:StringLike':
+                  'cognito-identity.amazonaws.com:amr': authenticated
+        Policies:
+          - PolicyName: CognitoS3Access
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                # Users can only read/list their own prefix
+                - Effect: Allow
+                  Action:
+                    - s3:GetObject
+                    - s3:ListBucket
+                  Resource:
+                    - !Sub 'arn:aws:s3:::${self:provider.environment.DATA_BUCKET}'
+                    - !Sub 'arn:aws:s3:::${self:provider.environment.DATA_BUCKET}/${!cognito-identity.amazonaws.com:sub}/*'
+                  Condition:
+                    StringLike:
+                      's3:prefix':
+                        - !Sub '${!cognito-identity.amazonaws.com:sub}/*'
+
+    # ── DynamoDB (goals only) ────────────────────────────────
+    GoalsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.DYNAMODB_GOALS_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: weekStart
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+          - AttributeName: weekStart
+            KeyType: RANGE
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+
+    # ── S3 (screen time data, partitioned per user) ──────────
+    DataBucket:
       Type: AWS::S3::Bucket
       Properties:
-        BucketName: ${self:provider.environment.RAW_BUCKET}
+        BucketName: ${self:provider.environment.DATA_BUCKET}
         BucketEncryption:
           ServerSideEncryptionConfiguration:
             - ServerSideEncryptionByDefault:
                 SSEAlgorithm: AES256
-        LifecycleConfiguration:
-          Rules:
-            - Id: DeleteRawAfter30Days
-              Status: Enabled
-              ExpirationInDays: 30
         PublicAccessBlockConfiguration:
           BlockPublicAcls: true
           BlockPublicPolicy: true
           IgnorePublicAcls: true
           RestrictPublicBuckets: true
-        VersioningConfiguration:
-          Status: Enabled
         CorsConfiguration:
           CorsRules:
             - AllowedOrigins:
                 - '*'
               AllowedMethods:
-                - PUT
-                - POST
+                - GET
+                - HEAD
               AllowedHeaders:
                 - '*'
-              MaxAge: 3000
+              MaxAge: 3600
 
-    ProcessedBucket:
+    # ── Frontend Hosting (prod only) ─────────────────────────
+    WebsiteBucket:
       Type: AWS::S3::Bucket
+      Condition: IsProduction
       Properties:
-        BucketName: ${self:provider.environment.PROCESSED_BUCKET}
-        BucketEncryption:
-          ServerSideEncryptionConfiguration:
-            - ServerSideEncryptionByDefault:
-                SSEAlgorithm: AES256
-        LifecycleConfiguration:
-          Rules:
-            - Id: TransitionToIA
-              Status: Enabled
-              Transitions:
-                - TransitionInDays: 90
-                  StorageClass: STANDARD_IA
-                - TransitionInDays: 180
-                  StorageClass: INTELLIGENT_TIERING
-                - TransitionInDays: 365
-                  StorageClass: GLACIER_IR
-                - TransitionInDays: 730
-                  StorageClass: DEEP_ARCHIVE
+        BucketName: ${self:custom.websiteBucket}
         PublicAccessBlockConfiguration:
           BlockPublicAcls: true
           BlockPublicPolicy: true
           IgnorePublicAcls: true
           RestrictPublicBuckets: true
-        VersioningConfiguration:
-          Status: Enabled
-        IntelligentTieringConfigurations:
-          - Id: ArchiveConfig
-            Status: Enabled
-            Tierings:
-              - AccessTier: ARCHIVE_ACCESS
-                Days: 90
-              - AccessTier: DEEP_ARCHIVE_ACCESS
-                Days: 180
 
-    MetadataTable:
-      Type: AWS::DynamoDB::Table
+    CloudFrontOAC:
+      Type: AWS::CloudFront::OriginAccessControl
+      Condition: IsProduction
       Properties:
-        TableName: ${self:provider.environment.DYNAMODB_TABLE}
-        BillingMode: PAY_PER_REQUEST
-        PointInTimeRecoverySpecification:
-          PointInTimeRecoveryEnabled: true
-        SSESpecification:
-          SSEEnabled: true
-        StreamSpecification:
-          StreamViewType: NEW_AND_OLD_IMAGES
-        AttributeDefinitions:
-          - AttributeName: customerId
-            AttributeType: S
-          - AttributeName: date
-            AttributeType: S
-          - AttributeName: uploadTimestamp
-            AttributeType: N
-        KeySchema:
-          - AttributeName: customerId
-            KeyType: HASH
-          - AttributeName: date
-            KeyType: RANGE
-        GlobalSecondaryIndexes:
-          - IndexName: UploadTimestampIndex
-            KeySchema:
-              - AttributeName: customerId
-                KeyType: HASH
-              - AttributeName: uploadTimestamp
-                KeyType: RANGE
-            Projection:
-              ProjectionType: ALL
-        TimeToLiveSpecification:
-          AttributeName: ttl
+        OriginAccessControlConfig:
+          Name: ${self:service}-${sls:stage}-oac
+          OriginAccessControlOriginType: s3
+          SigningBehavior: always
+          SigningProtocol: sigv4
+
+    WebsiteBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Condition: IsProduction
+      Properties:
+        Bucket: !Ref WebsiteBucket
+        PolicyDocument:
+          Statement:
+            - Sid: AllowCloudFrontServicePrincipal
+              Effect: Allow
+              Principal:
+                Service: cloudfront.amazonaws.com
+              Action: s3:GetObject
+              Resource: !Sub '${WebsiteBucket.Arn}/*'
+              Condition:
+                StringEquals:
+                  'AWS:SourceArn': !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
+
+    SecurityHeadersPolicy:
+      Type: AWS::CloudFront::ResponseHeadersPolicy
+      Condition: IsProduction
+      Properties:
+        ResponseHeadersPolicyConfig:
+          Name: ${self:service}-${sls:stage}-security-headers
+          SecurityHeadersConfig:
+            StrictTransportSecurity:
+              AccessControlMaxAgeSec: 63072000
+              IncludeSubdomains: true
+              Preload: true
+              Override: true
+            ContentTypeOptions:
+              Override: true
+            FrameOptions:
+              FrameOption: DENY
+              Override: true
+            ReferrerPolicy:
+              ReferrerPolicy: strict-origin-when-cross-origin
+              Override: true
+            XSSProtection:
+              ModeBlock: true
+              Protection: true
+              Override: true
+
+    CloudFrontDistribution:
+      Type: AWS::CloudFront::Distribution
+      Condition: IsProduction
+      Properties:
+        DistributionConfig:
+          Aliases:
+            - ${self:custom.domainName}
+            - www.${self:custom.domainName}
+          ViewerCertificate:
+            AcmCertificateArn: ${self:custom.certificateArn}
+            MinimumProtocolVersion: TLSv1.2_2021
+            SslSupportMethod: sni-only
+          DefaultCacheBehavior:
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
+            Compress: true
+          Origins:
+            - Id: S3Origin
+              DomainName: !GetAtt WebsiteBucket.RegionalDomainName
+              OriginAccessControlId: !GetAtt CloudFrontOAC.Id
+              S3OriginConfig:
+                OriginAccessIdentity: ''
+          DefaultRootObject: index.html
+          CustomErrorResponses:
+            - ErrorCode: 403
+              ResponsePagePath: /index.html
+              ResponseCode: 200
+              ErrorCachingMinTTL: 0
+            - ErrorCode: 404
+              ResponsePagePath: /index.html
+              ResponseCode: 200
+              ErrorCachingMinTTL: 0
           Enabled: true
-
-    CacheTable:
-      Type: AWS::DynamoDB::Table
-      Properties:
-        TableName: ${self:provider.environment.DYNAMODB_CACHE_TABLE}
-        BillingMode: PAY_PER_REQUEST
-        SSESpecification:
-          SSEEnabled: true
-        AttributeDefinitions:
-          - AttributeName: cacheKey
-            AttributeType: S
-        KeySchema:
-          - AttributeName: cacheKey
-            KeyType: HASH
-        TimeToLiveSpecification:
-          AttributeName: ttl
-          Enabled: true
-
-    AlertTopic:
-      Type: AWS::SNS::Topic
-      Properties:
-        TopicName: ${self:service}-${sls:stage}-alerts
-        DisplayName: Screen Time API Alerts
-
-    AlertEmailSubscription:
-      Type: AWS::SNS::Subscription
-      Properties:
-        Protocol: email
-        TopicArn: !Ref AlertTopic
-        Endpoint: ${env:ALERT_EMAIL, 'admin@example.com'}
-
-    ApiGatewayRestApi:
-      Type: AWS::ApiGateway::RestApi
-      Properties:
-        EndpointConfiguration:
-          Types:
-            - REGIONAL
-
-    WAFWebACL:
-      Type: AWS::WAFv2::WebACL
-      Properties:
-        Name: ${self:service}-${sls:stage}-waf
-        Scope: REGIONAL
-        DefaultAction:
-          Allow: {}
-        Rules:
-          - Name: RateLimitRule
-            Priority: 1
-            Statement:
-              RateBasedStatement:
-                Limit: 2000
-                AggregateKeyType: IP
-            Action:
-              Block: {}
-            VisibilityConfig:
-              SampledRequestsEnabled: true
-              CloudWatchMetricsEnabled: true
-              MetricName: RateLimitRule
-        VisibilityConfig:
-          SampledRequestsEnabled: true
-          CloudWatchMetricsEnabled: true
-          MetricName: ${self:service}-${sls:stage}-waf
-
-    CloudWatchAlarmHighErrorRate:
-      Type: AWS::CloudWatch::Alarm
-      Properties:
-        AlarmName: ${self:service}-${sls:stage}-high-error-rate
-        AlarmDescription: Alert when error rate is high
-        MetricName: Errors
-        Namespace: AWS/Lambda
-        Statistic: Sum
-        Period: 300
-        EvaluationPeriods: 2
-        Threshold: 10
-        ComparisonOperator: GreaterThanThreshold
-        AlarmActions:
-          - !Ref AlertTopic
-
-    CloudWatchAlarmHighLatency:
-      Type: AWS::CloudWatch::Alarm
-      Properties:
-        AlarmName: ${self:service}-${sls:stage}-high-latency
-        AlarmDescription: Alert when latency is high
-        MetricName: Duration
-        Namespace: AWS/Lambda
-        Statistic: Average
-        Period: 300
-        EvaluationPeriods: 2
-        Threshold: 5000
-        ComparisonOperator: GreaterThanThreshold
-        AlarmActions:
-          - !Ref AlertTopic
+          HttpVersion: http2and3
+          PriceClass: PriceClass_100
 
   Outputs:
     ApiEndpoint:
-      Description: API Gateway endpoint URL
-      Value: !Sub 'https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${sls:stage}'
-    
-    RawBucketName:
-      Description: Raw data bucket name
-      Value: !Ref RawBucket
-    
-    ProcessedBucketName:
-      Description: Processed data bucket name
-      Value: !Ref ProcessedBucket
+      Description: HTTP API endpoint
+      Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com'
+    UserPoolId:
+      Description: Cognito User Pool ID
+      Value: !Ref CognitoUserPool
+    UserPoolClientId:
+      Description: Cognito User Pool Client ID
+      Value: !Ref CognitoUserPoolClient
+    IdentityPoolId:
+      Description: Cognito Identity Pool ID
+      Value: !Ref CognitoIdentityPool
+    CognitoDomain:
+      Description: Cognito hosted UI domain
+      Value: !Sub '${self:service}-${sls:stage}-${env:COGNITO_DOMAIN_SUFFIX, "app"}.auth.${AWS::Region}.amazoncognito.com'
+    DataBucketName:
+      Description: S3 bucket for screen time data
+      Value: !Ref DataBucket
+    WebsiteBucketName:
+      Condition: IsProduction
+      Description: S3 bucket for website hosting
+      Value: !Ref WebsiteBucket
+    CloudFrontDistributionId:
+      Condition: IsProduction
+      Description: CloudFront distribution ID
+      Value: !Ref CloudFrontDistribution
+    CloudFrontDomainName:
+      Condition: IsProduction
+      Description: CloudFront domain name
+      Value: !GetAtt CloudFrontDistribution.DomainName
 
 plugins:
   - serverless-offline
-  - serverless-plugin-tracing

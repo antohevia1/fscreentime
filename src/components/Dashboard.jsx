@@ -82,26 +82,37 @@ function Dashboard({ data }) {
     const totalMinutes = filtered.reduce((s, d) => s + d.minutes, 0);
     const dates = [...new Set(filtered.map(d => d.date))];
     const avgDaily = dates.length ? totalMinutes / dates.length : 0;
-    const allDates = [...new Set(parsed.map(d => d.date))].sort();
+    // Use filtered data (respects app filter) for last week / prev week
+    const allDates = [...new Set(filtered.map(d => d.date))].sort();
     let change = null, lastWeekMin = 0;
     if (allDates.length >= 7) {
       const last7 = allDates.slice(-7);
       const prev7 = allDates.slice(-14, -7);
-      lastWeekMin = parsed.filter(d => last7.includes(d.date)).reduce((s, d) => s + d.minutes, 0);
-      const prevMin = parsed.filter(d => prev7.includes(d.date)).reduce((s, d) => s + d.minutes, 0);
+      lastWeekMin = filtered.filter(d => last7.includes(d.date)).reduce((s, d) => s + d.minutes, 0);
+      const prevMin = filtered.filter(d => prev7.includes(d.date)).reduce((s, d) => s + d.minutes, 0);
       if (prevMin) change = ((lastWeekMin - prevMin) / prevMin * 100).toFixed(1);
     }
     return { totalMinutes, avgDaily, lastWeekMin, change };
-  }, [filtered, parsed]);
+  }, [filtered]);
 
   const areaChart = useMemo(() => {
-    const dates = [...new Set(filtered.map(d => d.date))].sort();
-    const apps = [...new Set(filtered.map(d => d.app))].slice(0, 10);
+    // Use time-filtered but NOT app-filtered data so all apps appear
+    let base = parsed;
+    if (timeframe !== 'all') {
+      const days = timeframe === '7d' ? 7 : timeframe === '14d' ? 14 : timeframe === '30d' ? 30 : 90;
+      const cutoff = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
+      base = base.filter(d => d.date >= cutoff);
+    }
+    const dates = [...new Set(base.map(d => d.date))].sort();
+    const apps = [...new Set(base.map(d => d.app))].slice(0, 10);
     const map = {};
-    filtered.forEach(d => { map[`${d.date}|${d.app}`] = (map[`${d.date}|${d.app}`] || 0) + d.minutes; });
+    base.forEach(d => { map[`${d.date}|${d.app}`] = (map[`${d.date}|${d.app}`] || 0) + d.minutes; });
     return {
+      apps,
       series: apps.map((app, i) => ({
-        name: app, data: dates.map(dt => +((map[`${dt}|${app}`] || 0) / 60).toFixed(2)), color: VIVID[i % VIVID.length],
+        name: app,
+        data: dates.map(dt => +((map[`${dt}|${app}`] || 0) / 60).toFixed(2)),
+        color: selectedApp === 'all' || selectedApp === app ? VIVID[i % VIVID.length] : '#3e3830',
       })),
       options: {
         ...darkChart,
@@ -111,9 +122,10 @@ function Dashboard({ data }) {
         stroke: { curve: 'smooth', width: 1 },
         fill: { type: 'gradient', gradient: { opacityFrom: 0.5, opacityTo: 0.05 } },
         tooltip: { y: { formatter: ttFmt } },
+        legend: { show: false },
       },
     };
-  }, [filtered]);
+  }, [parsed, timeframe, selectedApp]);
 
   const hBarChart = useMemo(() => {
     const map = {};
@@ -224,8 +236,24 @@ function Dashboard({ data }) {
           </div>
         </div>
 
+        {/* Area chart with custom legend */}
+        <div className="bg-surface-card border border-border rounded-xl p-5">
+          <h3 className="text-sm font-medium text-cream mb-2">Usage Over Time</h3>
+          <Chart options={areaChart.options} series={areaChart.series} type="area" height={280} />
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 justify-center">
+            {areaChart.apps.map((app, i) => (
+              <button key={app} onClick={() => onLegendClick(app)}
+                className="flex items-center gap-1.5 text-xs transition"
+                style={{ color: selectedApp === 'all' || selectedApp === app ? '#f5efe6' : '#3e3830' }}>
+                <span className="w-2.5 h-2.5 rounded-sm inline-block"
+                  style={{ backgroundColor: selectedApp === 'all' || selectedApp === app ? VIVID[i % VIVID.length] : '#3e3830' }} />
+                {app}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {[
-          { title: 'Usage Over Time', chart: areaChart, type: 'area', h: 320 },
           { title: 'Top Apps', chart: hBarChart, type: 'bar', h: 380 },
           { title: 'Time Distribution by App', chart: treemapChart, type: 'treemap', h: 320 },
         ].map((c, i) => (

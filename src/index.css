@@ -9,6 +9,35 @@ body {
   color: #f5efe6;
 }
 
+/* Landing page ambient glow */
+.hero-glow {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.12;
+  pointer-events: none;
+}
+
+/* Ticker */
+@keyframes ticker {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.ticker-track { animation: ticker 30s linear infinite; }
+
+/* Scroll reveal */
+.reveal {
+  opacity: 0;
+  transform: translateY(32px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 /* ApexCharts dark overrides */
 .apexcharts-tooltip { background: #2e2a24 !important; border-color: #3e3830 !important; color: #f5efe6 !important; }
 .apexcharts-tooltip-title { background: #3a352e !important; border-color: #3e3830 !important; color: #f5efe6 !important; }

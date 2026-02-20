@@ -1,32 +1,58 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
+import { signIn as amplifySignIn, signUp as amplifySignUp, signOut as amplifySignOut, getCurrentUser, fetchAuthSession, signInWithRedirect } from 'aws-amplify/auth';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('st_user');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const signIn = (email, password) => {
-    const u = { email, alias: email.split('@')[0] };
-    localStorage.setItem('st_user', JSON.stringify(u));
-    setUser(u);
-  };
+  useEffect(() => { checkUser(); }, []);
 
-  const signUp = (email, password, alias) => {
-    const u = { email, alias };
-    localStorage.setItem('st_user', JSON.stringify(u));
-    setUser(u);
-  };
+  async function checkUser() {
+    try {
+      const currentUser = await getCurrentUser();
+      const session = await fetchAuthSession();
+      setUser({
+        userId: currentUser.userId,
+        identityId: session.identityId,
+        email: currentUser.signInDetails?.loginId || currentUser.username,
+        alias: currentUser.username,
+        token: session.tokens?.idToken?.toString(),
+        credentials: session.credentials,
+      });
+    } catch {
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  const signOut = () => {
-    localStorage.removeItem('st_user');
+  async function signIn(email, password) {
+    const result = await amplifySignIn({ username: email, password });
+    if (result.isSignedIn) await checkUser();
+    return result;
+  }
+
+  async function signUp(email, password, alias) {
+    return amplifySignUp({
+      username: email,
+      password,
+      options: { userAttributes: { preferred_username: alias || email.split('@')[0] } },
+    });
+  }
+
+  async function socialSignIn(provider) {
+    await signInWithRedirect({ provider });
+  }
+
+  async function signOut() {
+    await amplifySignOut();
     setUser(null);
-  };
+  }
 
   return (
-    <AuthContext.Provider value={{ user, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, socialSignIn }}>
       {children}
     </AuthContext.Provider>
   );
