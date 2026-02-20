@@ -267,41 +267,8 @@ export default function Landing() {
                 step="01"
                 title="Install Shortcuts"
                 icon={
-                  <div
-                    className="w-16 h-16 rounded-[18px] shadow-xl shadow-[#EF3E56]/25 flex items-center justify-center relative overflow-hidden"
-                    style={{
-                      transform:
-                        "perspective(400px) rotateY(-12deg) rotateX(6deg)",
-                      background:
-                        "linear-gradient(135deg, #F0648C 0%, #EF3E56 40%, #D42B5A 100%)",
-                    }}
-                  >
-                    <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
-                      <rect
-                        x="5"
-                        y="10"
-                        width="16"
-                        height="16"
-                        rx="4"
-                        fill="white"
-                        fillOpacity="0.9"
-                      />
-                      <rect
-                        x="13"
-                        y="8"
-                        width="16"
-                        height="16"
-                        rx="4"
-                        fill="white"
-                      />
-                      <path
-                        d="M21 12l-4 6h3l-4 6"
-                        stroke="#EF3E56"
-                        strokeWidth="2.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
+                  <div className="w-16 h-16 rounded-[18px] shadow-xl shadow-[#EF3E56]/25 flex items-center justify-center relative overflow-hidden">
+                    <img src="/shortcuss.webp" alt="Shortcuss" />
                     <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-[18px]" />
                   </div>
                 }
@@ -355,6 +322,32 @@ export default function Landing() {
               <StepCard
                 step="03"
                 title="Set Your Alias"
+                icon={
+                  <div
+                    className="w-16 h-16 rounded-[18px] shadow-xl shadow-[#A78BFA]/25 flex items-center justify-center relative overflow-hidden"
+                    style={{
+                      transform:
+                        "perspective(400px) rotateY(-12deg) rotateX(6deg)",
+                      background:
+                        "linear-gradient(135deg, #c4b5fd 0%, #A78BFA 40%, #7C5FD3 100%)",
+                    }}
+                  >
+                    <svg
+                      width="30"
+                      height="30"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="white"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
+                    </svg>
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-[18px]" />
+                  </div>
+                }
                 desc="On first run, enter your display name. Your dashboard populates within 24 hours."
               />
             </div>
