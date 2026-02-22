@@ -47,8 +47,8 @@ jobs:
           VITE_COGNITO_DOMAIN: ${{ secrets.VITE_COGNITO_DOMAIN }}
           VITE_DATA_BUCKET: screen-time-api-prod-data
           VITE_AWS_REGION: ${{ env.AWS_REGION }}
-          VITE_REDIRECT_SIGN_IN: https://${{ env.PROD_DOMAIN }}/app
-          VITE_REDIRECT_SIGN_OUT: https://${{ env.PROD_DOMAIN }}/
+          VITE_REDIRECT_SIGN_IN: https://www.${{ env.PROD_DOMAIN }}/app
+          VITE_REDIRECT_SIGN_OUT: https://www.${{ env.PROD_DOMAIN }}/
 
       # Cache hashed assets for 1 year, index.html never cached
       - name: Sync assets to S3

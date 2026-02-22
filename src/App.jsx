@@ -10,6 +10,11 @@ import Terms from './pages/Terms';
 
 Amplify.configure(amplifyConfig);
 
+// DEBUG: remove after fixing OAuth origin issue
+console.log('[OAuth Debug] current origin:', window.location.origin);
+console.log('[OAuth Debug] redirectSignIn:', amplifyConfig.Auth.Cognito.loginWith.oauth.redirectSignIn);
+console.log('[OAuth Debug] redirectSignOut:', amplifyConfig.Auth.Cognito.loginWith.oauth.redirectSignOut);
+
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen bg-surface flex items-center justify-center"><p className="text-muted text-sm">Loading…</p></div>;
