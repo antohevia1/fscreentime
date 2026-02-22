@@ -349,7 +349,7 @@ function DashboardEmpty({ userName, identityId }) {
     <div className="relative flex flex-col items-center px-4 py-8 md:py-16 overflow-hidden">
       {/* Ambient glow */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="hero-glow bg-caramel absolute" style={{ top: '20%', left: '30%', opacity: 0.09 }} />
+        <div className="hero-glow text-caramel absolute" style={{ top: '20%', left: '30%', opacity: 0.09 }} />
       </div>
 
       <div className="relative z-10 w-full max-w-3xl">

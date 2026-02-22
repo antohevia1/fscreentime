@@ -73,9 +73,9 @@ export default function Landing() {
 
       {/* Hero */}
       <section className="relative max-w-5xl mx-auto px-8 pt-20 pb-32 text-center">
-        <div className="hero-glow bg-caramel absolute top-0 left-1/4 animate-pulse-soft" />
+        <div className="hero-glow text-caramel absolute top-0 left-1/4 animate-pulse-soft" />
         <div
-          className="hero-glow bg-[#b07d52] absolute bottom-0 right-1/4 animate-pulse-soft"
+          className="hero-glow text-[#b07d52] absolute bottom-0 right-1/4 animate-pulse-soft"
           style={{ animationDelay: "1.5s" }}
         />
         <div className="relative z-10">
@@ -151,7 +151,7 @@ export default function Landing() {
           ].map((s, i) => (
             <div
               key={i}
-              className="bg-surface-card/50 border border-border/50 rounded-2xl p-6 backdrop-blur-sm"
+              className="bg-surface-card/50 border border-border/50 rounded-2xl p-6"
             >
               <p className="text-3xl md:text-4xl font-bold text-cream">
                 {s.value}
@@ -487,7 +487,7 @@ export default function Landing() {
       <section className="py-24 reveal">
         <div className="max-w-5xl mx-auto px-8">
           <div className="bg-gradient-to-br from-surface-card to-surface-light rounded-3xl border border-border p-10 md:p-16 relative overflow-hidden">
-            <div className="hero-glow bg-caramel absolute -top-20 -right-20 w-80 h-80 opacity-10" />
+            <div className="hero-glow text-caramel absolute -top-20 -right-20 w-80 h-80 opacity-10" />
             <div className="relative z-10 grid md:grid-cols-2 gap-12 items-center">
               <div>
                 <span className="text-xs uppercase tracking-[0.15em] text-caramel/70 mb-4 block">
@@ -606,7 +606,7 @@ export default function Landing() {
       <section className="py-24 reveal">
         <div className="max-w-3xl mx-auto px-8 text-center">
           <div className="bg-gradient-to-br from-surface-card to-surface-light rounded-3xl border border-border p-12 md:p-16 relative overflow-hidden">
-            <div className="hero-glow bg-caramel absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 opacity-10" />
+            <div className="hero-glow text-caramel absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 opacity-10" />
             <div className="relative z-10">
               <h2 className="text-4xl md:text-5xl font-bold mb-4 leading-tight">
                 Your future self
