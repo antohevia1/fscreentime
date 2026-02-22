@@ -11,6 +11,7 @@ provider:
   name: aws
   runtime: nodejs18.x
   region: us-east-1
+  profile: ${env:AWS_PROFILE, 'other'}
   stage: ${opt:stage, 'dev'}
   memorySize: 256
   timeout: 10
