@@ -83,7 +83,7 @@ Supported field names:
 
 ## Tech Stack
 
-- Frontend: React, Vite, Recharts
+- Frontend: React, Vite, Recharts, Apex charts
 - Backend: Node.js, AWS Lambda, Serverless Framework
 - Storage: AWS S3
 - API: AWS API Gateway
