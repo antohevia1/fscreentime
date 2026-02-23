@@ -265,10 +265,10 @@ export default function Landing() {
             <div className="grid md:grid-cols-3 gap-8">
               <StepCard
                 step="01"
-                title="Install Shortcuts"
+                title="Download Shortcuts App"
                 icon={
                   <div className="w-16 h-16 rounded-[18px] shadow-xl shadow-[#EF3E56]/25 flex items-center justify-center relative overflow-hidden">
-                    <img src="/shortcuss.webp" alt="Shortcuss" />
+                    <img src="/shortcuss.webp" alt="Shortcuts app" />
                     <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-[18px]" />
                   </div>
                 }
@@ -284,13 +284,13 @@ export default function Landing() {
                     >
                       Shortcuts
                     </a>{" "}
-                    from the App Store. Pre installed on iOS 13+.
+                    from the App Store. Pre-installed on iOS&nbsp;13+.
                   </>
                 }
               />
               <StepCard
                 step="02"
-                title="Add Our Automation"
+                title="Get fScreen Shortcut"
                 icon={
                   <div
                     className="w-16 h-16 rounded-[18px] shadow-xl shadow-caramel/25 flex items-center justify-center relative overflow-hidden"
@@ -317,11 +317,11 @@ export default function Landing() {
                   </div>
                 }
                 iconLink={import.meta.env.VITE_SHORTCUT_URL}
-                desc="Tap to install our shortcut. It runs daily and syncs your screen time automatically."
+                desc="Download our shortcut and paste your Identity ID when prompted. It syncs your screen time automatically."
               />
               <StepCard
                 step="03"
-                title="Set Your Alias"
+                title="Create Daily Automation"
                 icon={
                   <div
                     className="w-16 h-16 rounded-[18px] shadow-xl shadow-[#A78BFA]/25 flex items-center justify-center relative overflow-hidden"
@@ -342,13 +342,13 @@ export default function Landing() {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                     >
-                      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-                      <circle cx="12" cy="7" r="4" />
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
                     </svg>
                     <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-[18px]" />
                   </div>
                 }
-                desc="On first run, enter your display name. Your dashboard populates within 24 hours."
+                desc="Create an automation in Shortcuts to run fScreen at 9 AM daily. Your dashboard populates within 24 hours."
               />
             </div>
           ) : (
