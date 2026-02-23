@@ -344,27 +344,20 @@ function CopyField({ value }) {
   );
 }
 
-function ScreenshotPlaceholder({ src, alt, className = '' }) {
-  const [failed, setFailed] = useState(false);
+function ScreenshotCarousel({ items, className = '' }) {
   return (
-    <div className={`rounded-xl border border-border bg-surface overflow-hidden ${className}`}>
-      {!failed ? (
-        <img
-          src={src}
-          alt={alt}
-          className="w-full h-auto"
-          onError={() => setFailed(true)}
-        />
-      ) : (
-        <div className="aspect-video flex flex-col items-center justify-center text-muted gap-2 p-6">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="opacity-40">
-            <rect x="2" y="3" width="20" height="14" rx="2" />
-            <line x1="8" y1="21" x2="16" y2="21" />
-            <line x1="12" y1="17" x2="12" y2="21" />
-          </svg>
-          <span className="text-xs opacity-60">Screenshot coming soon</span>
+    <div
+      className={`flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 -mx-1 px-1 ${className}`}
+      style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+    >
+      {items.map((item, i) => (
+        <div key={i} className="snap-start shrink-0 w-[55%] md:w-[40%]">
+          <div className="rounded-xl border border-border bg-surface overflow-hidden shadow-lg shadow-black/20">
+            <img src={item.src} alt={item.caption} className="w-full h-auto" />
+          </div>
+          <p className="text-[11px] text-muted mt-2 text-center leading-relaxed px-1">{item.caption}</p>
         </div>
-      )}
+      ))}
     </div>
   );
 }
@@ -400,12 +393,11 @@ function DashboardEmpty({ userName, identityId }) {
             Apple Shortcuts lets you build powerful automations on your iPhone.
             It comes pre-installed on iOS&nbsp;13+. If you removed it, re-download it from the App&nbsp;Store.
           </p>
-          <ScreenshotPlaceholder src="/onboarding-shortcuts.png" alt="Download Shortcuts from App Store" />
           <a
             href="https://apps.apple.com/app/shortcuts/id915249334"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 mt-5 px-5 py-2.5 rounded-xl bg-caramel/10 border border-caramel/30 text-caramel text-sm font-semibold hover:bg-caramel/20 transition-all"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-caramel/10 border border-caramel/30 text-caramel text-sm font-semibold hover:bg-caramel/20 transition-all"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
@@ -434,12 +426,32 @@ function DashboardEmpty({ userName, identityId }) {
       ),
       content: (
         <>
-          <p className="text-sm text-muted leading-relaxed mb-5">
-            Tap the link below to add the fScreen shortcut to your Shortcuts library.
-            When it runs for the first time, it will ask for your Identity&nbsp;ID &mdash; copy it from below and paste&nbsp;it&nbsp;in.
+          <p className="text-sm text-muted leading-relaxed mb-4">
+            Tap the link below to import the shortcut, then paste your Identity&nbsp;ID when prompted.
           </p>
+          <ol className="text-sm text-muted space-y-2 mb-5 list-none pl-0">
+            <li className="flex gap-3">
+              <span className="text-caramel font-semibold shrink-0">1.</span>
+              <span>Tap <span className="text-cream">Get fScreen Shortcut</span> below and hit <span className="text-cream">Set Up Shortcut</span>.</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="text-caramel font-semibold shrink-0">2.</span>
+              <span>Paste your <span className="text-cream">Identity ID</span> into the deviceKey field (copy it below).</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="text-caramel font-semibold shrink-0">3.</span>
+              <span>When asked for permissions, tap <span className="text-cream font-semibold">Always Allow</span>.</span>
+            </li>
+          </ol>
           <CopyField value={identityId} />
-          <ScreenshotPlaceholder src="/onboarding-fscreen.png" alt="Add fScreen shortcut" className="mt-5" />
+          <ScreenshotCarousel
+            className="mt-5"
+            items={[
+              { src: '/step2.1.PNG', caption: 'Tap "Set Up Shortcut" to import' },
+              { src: '/step2.2.PNG', caption: 'Paste your Identity ID here' },
+              { src: '/step2.3.PNG', caption: 'Tap "Always Allow"' },
+            ]}
+          />
           <a
             href={import.meta.env.VITE_SHORTCUT_URL}
             target="_blank"
@@ -477,25 +489,32 @@ function DashboardEmpty({ userName, identityId }) {
           <p className="text-sm text-muted leading-relaxed mb-4">
             Create an automation in Shortcuts so your screen time data syncs every morning.
           </p>
-          <ol className="text-sm text-muted space-y-2.5 mb-5 list-none pl-0">
+          <ol className="text-sm text-muted space-y-2 mb-5 list-none pl-0">
             <li className="flex gap-3">
               <span className="text-caramel font-semibold shrink-0">1.</span>
-              <span>Open <span className="text-cream">Shortcuts</span> and tap the <span className="text-cream">Automation</span> tab.</span>
+              <span>Open <span className="text-cream">Shortcuts</span>, tap the <span className="text-cream">Automation</span> tab, then tap <span className="text-cream">+</span>.</span>
             </li>
             <li className="flex gap-3">
               <span className="text-caramel font-semibold shrink-0">2.</span>
-              <span>Tap <span className="text-cream">New Automation</span> &rarr; <span className="text-cream">Time of Day</span>.</span>
+              <span>Select <span className="text-cream">Time of Day</span> as your trigger.</span>
             </li>
             <li className="flex gap-3">
               <span className="text-caramel font-semibold shrink-0">3.</span>
-              <span>Set the time to <span className="text-cream font-semibold">9:00&nbsp;AM</span>, repeat <span className="text-cream">Daily</span>.</span>
+              <span>Set <span className="text-cream font-semibold">9:00&nbsp;AM</span>, repeat <span className="text-cream">Daily</span>, and select <span className="text-cream font-semibold">Run Immediately</span>. Tap <span className="text-cream">Next</span>.</span>
             </li>
             <li className="flex gap-3">
               <span className="text-caramel font-semibold shrink-0">4.</span>
-              <span>Choose <span className="text-cream">Run Immediately</span> and select the <span className="text-cream">fScreen</span> shortcut.</span>
+              <span>Under My Shortcuts, select <span className="text-cream font-semibold">Daily ingest</span> &mdash; the shortcut you just imported.</span>
             </li>
           </ol>
-          <ScreenshotPlaceholder src="/onboarding-automation.png" alt="Create automation in Shortcuts" />
+          <ScreenshotCarousel
+            items={[
+              { src: '/Step3.1.PNG', caption: 'Tap + in the Automation tab' },
+              { src: '/Step3.2.PNG', caption: 'Select "Time of Day"' },
+              { src: '/Step3.3.PNG', caption: '9 AM, Daily, Run Immediately' },
+              { src: '/Step3.4.PNG', caption: 'Select "Daily ingest" shortcut' },
+            ]}
+          />
         </>
       ),
       buttonText: 'All set!',
