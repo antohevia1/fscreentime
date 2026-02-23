@@ -43,6 +43,11 @@ provider:
             - s3:GetObject
           Resource:
             - !Sub 'arn:aws:s3:::${self:provider.environment.DATA_BUCKET}/*'
+        - Effect: Allow
+          Action:
+            - s3:ListBucket
+          Resource:
+            - !Sub 'arn:aws:s3:::${self:provider.environment.DATA_BUCKET}'
 
 functions:
   # Public endpoint — phone devices post screen time here

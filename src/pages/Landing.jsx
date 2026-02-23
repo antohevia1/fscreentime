@@ -316,7 +316,7 @@ export default function Landing() {
                     <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-[18px]" />
                   </div>
                 }
-                iconLink="#"
+                iconLink={import.meta.env.VITE_SHORTCUT_URL}
                 desc="Tap to install our shortcut. It runs daily and syncs your screen time automatically."
               />
               <StepCard

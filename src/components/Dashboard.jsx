@@ -344,7 +344,164 @@ function CopyField({ value }) {
   );
 }
 
+function ScreenshotPlaceholder({ src, alt, className = '' }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <div className={`rounded-xl border border-border bg-surface overflow-hidden ${className}`}>
+      {!failed ? (
+        <img
+          src={src}
+          alt={alt}
+          className="w-full h-auto"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <div className="aspect-video flex flex-col items-center justify-center text-muted gap-2 p-6">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="opacity-40">
+            <rect x="2" y="3" width="20" height="14" rx="2" />
+            <line x1="8" y1="21" x2="16" y2="21" />
+            <line x1="12" y1="17" x2="12" y2="21" />
+          </svg>
+          <span className="text-xs opacity-60">Screenshot coming soon</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DashboardEmpty({ userName, identityId }) {
+  const [activeStep, setActiveStep] = useState(0);
+  const [completed, setCompleted] = useState([false, false, false]);
+
+  const markDone = (idx) => {
+    setCompleted(prev => {
+      const next = [...prev];
+      next[idx] = true;
+      return next;
+    });
+    if (idx < 2) setActiveStep(idx + 1);
+  };
+
+  const canAccess = (idx) => idx === 0 || completed[idx - 1];
+  const allDone = completed.every(Boolean);
+
+  const steps = [
+    {
+      title: 'Download Shortcuts App',
+      summary: 'Get Apple Shortcuts on your iPhone.',
+      icon: (
+        <div className="w-11 h-11 md:w-14 md:h-14 rounded-[14px] md:rounded-[18px] shadow-xl shadow-[#EF3E56]/20 overflow-hidden shrink-0">
+          <img src="/shortcuss.webp" alt="Shortcuts app" className="w-full h-full object-cover" />
+        </div>
+      ),
+      content: (
+        <>
+          <p className="text-sm text-muted leading-relaxed mb-5">
+            Apple Shortcuts lets you build powerful automations on your iPhone.
+            It comes pre-installed on iOS&nbsp;13+. If you removed it, re-download it from the App&nbsp;Store.
+          </p>
+          <ScreenshotPlaceholder src="/onboarding-shortcuts.png" alt="Download Shortcuts from App Store" />
+          <a
+            href="https://apps.apple.com/app/shortcuts/id915249334"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 mt-5 px-5 py-2.5 rounded-xl bg-caramel/10 border border-caramel/30 text-caramel text-sm font-semibold hover:bg-caramel/20 transition-all"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+            Open in App Store
+          </a>
+        </>
+      ),
+      buttonText: 'I have Shortcuts installed',
+    },
+    {
+      title: 'Get fScreen Shortcut',
+      summary: 'Download our shortcut and paste your Identity ID.',
+      icon: (
+        <div
+          className="w-11 h-11 md:w-14 md:h-14 rounded-[14px] md:rounded-[18px] shadow-xl shadow-caramel/20 flex items-center justify-center relative overflow-hidden shrink-0"
+          style={{ background: 'linear-gradient(135deg, #d4aa80 0%, #c4956a 40%, #b07d52 100%)' }}
+        >
+          <svg width="22" height="22" className="md:w-7 md:h-7" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+          </svg>
+          <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent" />
+        </div>
+      ),
+      content: (
+        <>
+          <p className="text-sm text-muted leading-relaxed mb-5">
+            Tap the link below to add the fScreen shortcut to your Shortcuts library.
+            When it runs for the first time, it will ask for your Identity&nbsp;ID &mdash; copy it from below and paste&nbsp;it&nbsp;in.
+          </p>
+          <CopyField value={identityId} />
+          <ScreenshotPlaceholder src="/onboarding-fscreen.png" alt="Add fScreen shortcut" className="mt-5" />
+          <a
+            href={import.meta.env.VITE_SHORTCUT_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 mt-5 px-5 py-2.5 rounded-xl bg-caramel/10 border border-caramel/30 text-caramel text-sm font-semibold hover:bg-caramel/20 transition-all"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Get fScreen Shortcut
+          </a>
+        </>
+      ),
+      buttonText: "I've added the shortcut",
+    },
+    {
+      title: 'Create Daily Automation',
+      summary: 'Set the shortcut to run at 9 AM every day.',
+      icon: (
+        <div
+          className="w-11 h-11 md:w-14 md:h-14 rounded-[14px] md:rounded-[18px] shadow-xl shadow-[#A78BFA]/20 flex items-center justify-center relative overflow-hidden shrink-0"
+          style={{ background: 'linear-gradient(135deg, #c4b5fd 0%, #A78BFA 40%, #7C5FD3 100%)' }}
+        >
+          <svg width="22" height="22" className="md:w-7 md:h-7" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+          <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent" />
+        </div>
+      ),
+      content: (
+        <>
+          <p className="text-sm text-muted leading-relaxed mb-4">
+            Create an automation in Shortcuts so your screen time data syncs every morning.
+          </p>
+          <ol className="text-sm text-muted space-y-2.5 mb-5 list-none pl-0">
+            <li className="flex gap-3">
+              <span className="text-caramel font-semibold shrink-0">1.</span>
+              <span>Open <span className="text-cream">Shortcuts</span> and tap the <span className="text-cream">Automation</span> tab.</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="text-caramel font-semibold shrink-0">2.</span>
+              <span>Tap <span className="text-cream">New Automation</span> &rarr; <span className="text-cream">Time of Day</span>.</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="text-caramel font-semibold shrink-0">3.</span>
+              <span>Set the time to <span className="text-cream font-semibold">9:00&nbsp;AM</span>, repeat <span className="text-cream">Daily</span>.</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="text-caramel font-semibold shrink-0">4.</span>
+              <span>Choose <span className="text-cream">Run Immediately</span> and select the <span className="text-cream">fScreen</span> shortcut.</span>
+            </li>
+          </ol>
+          <ScreenshotPlaceholder src="/onboarding-automation.png" alt="Create automation in Shortcuts" />
+        </>
+      ),
+      buttonText: 'All set!',
+    },
+  ];
+
   return (
     <div className="relative flex flex-col items-center px-4 py-8 md:py-16 overflow-hidden">
       {/* Ambient glow */}
@@ -352,10 +509,10 @@ function DashboardEmpty({ userName, identityId }) {
         <div className="hero-glow text-caramel absolute" style={{ top: '20%', left: '30%', opacity: 0.09 }} />
       </div>
 
-      <div className="relative z-10 w-full max-w-3xl">
+      <div className="relative z-10 w-full max-w-2xl">
 
         {/* Header */}
-        <div className="text-center mb-7 md:mb-12">
+        <div className="text-center mb-7 md:mb-10">
           <div className="inline-flex w-12 h-12 md:w-16 md:h-16 rounded-2xl bg-gradient-to-br from-caramel-light to-caramel items-center justify-center mb-4 md:mb-6 shadow-lg shadow-caramel/25">
             <svg width="24" height="24" viewBox="0 0 40 40" fill="none">
               <path
@@ -383,137 +540,171 @@ function DashboardEmpty({ userName, identityId }) {
           </p>
         </div>
 
-        {/* ── Desktop: 3-column card grid ── */}
-        <div className="hidden md:grid md:grid-cols-3 relative gap-5 mb-10">
-          {/* Connector line */}
-          <div className="absolute top-[3.75rem] left-[calc(16.67%+1.25rem)] right-[calc(16.67%+1.25rem)] h-px bg-gradient-to-r from-border via-caramel/30 to-border z-0" />
-
-          {/* Step 01 */}
-          <div className="relative bg-surface-card rounded-2xl p-7 border border-border hover:border-caramel/30 transition-all duration-300 hover:shadow-lg hover:shadow-caramel/5 hover:-translate-y-0.5 z-10">
-            <span className="text-xs font-mono text-caramel/50 mb-4 block">01</span>
-            <div className="mb-5">
-              <a href="https://apps.apple.com/app/shortcuts/id915249334" target="_blank" rel="noopener noreferrer" className="inline-block hover:scale-105 transition-transform">
-                <div className="w-14 h-14 rounded-[18px] shadow-xl shadow-[#EF3E56]/20 overflow-hidden">
-                  <img src="/shortcuss.webp" alt="Shortcuts app" className="w-full h-full object-cover" />
-                </div>
-              </a>
+        {/* Progress indicator */}
+        <div className="flex items-center justify-center mb-8 md:mb-10">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex items-center">
+              {i > 0 && (
+                <div
+                  className={`h-0.5 w-10 md:w-16 transition-colors duration-500 ${
+                    completed[i - 1] ? 'bg-caramel' : 'bg-border'
+                  }`}
+                />
+              )}
+              <button
+                onClick={() => canAccess(i) && setActiveStep(i)}
+                disabled={!canAccess(i)}
+                className={`relative w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${
+                  completed[i]
+                    ? 'bg-emerald-500/20 text-emerald-400 border-2 border-emerald-500/40 cursor-pointer'
+                    : activeStep === i
+                    ? 'bg-caramel text-surface shadow-lg shadow-caramel/30 scale-110'
+                    : canAccess(i)
+                    ? 'bg-surface-card text-muted border border-border hover:border-caramel/30 cursor-pointer'
+                    : 'bg-surface-card text-muted/40 border border-border/50 cursor-not-allowed'
+                }`}
+              >
+                {completed[i] ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                ) : (
+                  i + 1
+                )}
+              </button>
             </div>
-            <h3 className="text-base font-semibold text-cream mb-2">Install Shortcuts</h3>
-            <p className="text-sm text-muted leading-relaxed">
-              Download{' '}
-              <a href="https://apps.apple.com/app/shortcuts/id915249334" target="_blank" rel="noopener noreferrer" className="text-caramel hover:underline">Shortcuts</a>
-              {' '}from the App Store. Pre-installed on iOS&nbsp;13+.
-            </p>
-          </div>
-
-          {/* Step 02 */}
-          <div className="relative bg-surface-card rounded-2xl p-7 border border-border hover:border-caramel/30 transition-all duration-300 hover:shadow-lg hover:shadow-caramel/5 hover:-translate-y-0.5 z-10">
-            <span className="text-xs font-mono text-caramel/50 mb-4 block">02</span>
-            <div className="mb-5">
-              <div className="w-14 h-14 rounded-[18px] shadow-xl shadow-caramel/20 flex items-center justify-center relative overflow-hidden"
-                style={{ background: 'linear-gradient(135deg, #d4aa80 0%, #c4956a 40%, #b07d52 100%)', transform: 'perspective(400px) rotateY(12deg) rotateX(6deg)' }}>
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-                </svg>
-                <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-[18px]" />
-              </div>
-            </div>
-            <h3 className="text-base font-semibold text-cream mb-2">Add Our Automation</h3>
-            <p className="text-sm text-muted leading-relaxed">Tap to install our shortcut. It runs daily and syncs your screen time automatically.</p>
-          </div>
-
-          {/* Step 03 */}
-          <div className="relative bg-surface-card rounded-2xl p-7 border-2 border-caramel/40 shadow-lg shadow-caramel/10 z-10">
-            <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-caramel text-surface text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full shadow-md shadow-caramel/30 whitespace-nowrap">
-              <span className="w-1.5 h-1.5 rounded-full bg-surface animate-pulse" />
-              Do this now
-            </div>
-            <span className="text-xs font-mono text-caramel/50 mb-4 block mt-1">03</span>
-            <div className="mb-5">
-              <div className="w-14 h-14 rounded-[18px] shadow-xl shadow-[#A78BFA]/20 flex items-center justify-center relative overflow-hidden"
-                style={{ background: 'linear-gradient(135deg, #c4b5fd 0%, #A78BFA 40%, #7C5FD3 100%)', transform: 'perspective(400px) rotateY(-12deg) rotateX(6deg)' }}>
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
-                </svg>
-                <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-[18px]" />
-              </div>
-            </div>
-            <h3 className="text-base font-semibold text-cream mb-2">Enter Your Identity ID</h3>
-            <p className="text-sm text-muted leading-relaxed">When the shortcut runs for the first time it will ask for your ID. Copy yours below and paste it in.</p>
-            <CopyField value={identityId} />
-          </div>
+          ))}
         </div>
 
-        {/* ── Mobile: compact step list ── */}
-        <div className="md:hidden space-y-3 mb-7">
+        {/* Step cards */}
+        <div className="space-y-3">
+          {steps.map((step, i) => {
+            const isActive = activeStep === i;
+            const isDone = completed[i];
+            const accessible = canAccess(i);
 
-          {/* Step 01 — horizontal row */}
-          <div className="flex items-center gap-4 bg-surface-card rounded-xl p-4 border border-border">
-            <a href="https://apps.apple.com/app/shortcuts/id915249334" target="_blank" rel="noopener noreferrer" className="shrink-0">
-              <div className="w-11 h-11 rounded-[12px] overflow-hidden shadow-lg shadow-[#EF3E56]/15">
-                <img src="/shortcuss.webp" alt="Shortcuts app" className="w-full h-full object-cover" />
-              </div>
-            </a>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-baseline gap-2 mb-0.5">
-                <span className="text-[10px] font-mono text-caramel/50 shrink-0">01</span>
-                <h3 className="text-sm font-semibold text-cream truncate">Install Shortcuts</h3>
-              </div>
-              <p className="text-xs text-muted leading-relaxed">
-                Download{' '}
-                <a href="https://apps.apple.com/app/shortcuts/id915249334" target="_blank" rel="noopener noreferrer" className="text-caramel hover:underline">Shortcuts</a>
-                {' '}from the App Store. Pre-installed on iOS 13+.
-              </p>
-            </div>
-          </div>
+            return (
+              <div
+                key={i}
+                className={`rounded-2xl border transition-all duration-300 ${
+                  isActive
+                    ? 'border-caramel/40 bg-surface-card shadow-lg shadow-caramel/5'
+                    : isDone
+                    ? 'border-emerald-500/20 bg-surface-card/50'
+                    : accessible
+                    ? 'border-border bg-surface-card/50 hover:border-caramel/20'
+                    : 'border-border/50 bg-surface-card/30 opacity-50'
+                }`}
+              >
+                {/* Step header — always visible */}
+                <button
+                  onClick={() => accessible && setActiveStep(i)}
+                  disabled={!accessible}
+                  className={`w-full flex items-center gap-4 p-4 md:p-5 text-left ${
+                    accessible ? 'cursor-pointer' : 'cursor-not-allowed'
+                  }`}
+                >
+                  <div className={`transition-all duration-300 ${isActive ? 'scale-100' : 'scale-90 opacity-70'}`}>
+                    {step.icon}
+                  </div>
 
-          {/* Step 02 — horizontal row */}
-          <div className="flex items-center gap-4 bg-surface-card rounded-xl p-4 border border-border">
-            <div className="shrink-0 w-11 h-11 rounded-[12px] flex items-center justify-center relative overflow-hidden shadow-lg shadow-caramel/15"
-              style={{ background: 'linear-gradient(135deg, #d4aa80 0%, #c4956a 40%, #b07d52 100%)' }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-baseline gap-2 mb-0.5">
-                <span className="text-[10px] font-mono text-caramel/50 shrink-0">02</span>
-                <h3 className="text-sm font-semibold text-cream truncate">Add Our Automation</h3>
-              </div>
-              <p className="text-xs text-muted leading-relaxed">Tap to install our shortcut. It runs daily and syncs your screen time automatically.</p>
-            </div>
-          </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span
+                        className={`text-[10px] font-mono transition-colors duration-300 ${
+                          isDone ? 'text-emerald-400/60' : isActive ? 'text-caramel' : 'text-caramel/40'
+                        }`}
+                      >
+                        {String(i + 1).padStart(2, '0')}
+                      </span>
+                      <h3
+                        className={`text-sm md:text-base font-semibold transition-colors duration-300 ${
+                          isDone && !isActive ? 'text-cream/50' : 'text-cream'
+                        }`}
+                      >
+                        {step.title}
+                      </h3>
+                    </div>
+                    {!isActive && (
+                      <p className="text-xs text-muted truncate">{step.summary}</p>
+                    )}
+                  </div>
 
-          {/* Step 03 — full block (has copy field) */}
-          <div className="relative bg-surface-card rounded-xl p-4 border-2 border-caramel/40 shadow-lg shadow-caramel/10 mt-5">
-            <div className="absolute -top-3 left-4 flex items-center gap-1.5 bg-caramel text-surface text-[9px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full shadow-md shadow-caramel/30">
-              <span className="w-1 h-1 rounded-full bg-surface animate-pulse" />
-              Do this now
-            </div>
-            <div className="flex items-start gap-4 mb-4">
-              <div className="shrink-0 w-11 h-11 rounded-[12px] flex items-center justify-center relative overflow-hidden shadow-lg shadow-[#A78BFA]/15"
-                style={{ background: 'linear-gradient(135deg, #c4b5fd 0%, #A78BFA 40%, #7C5FD3 100%)' }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0 pt-0.5">
-                <div className="flex items-baseline gap-2 mb-0.5">
-                  <span className="text-[10px] font-mono text-caramel/50 shrink-0">03</span>
-                  <h3 className="text-sm font-semibold text-cream">Enter Your Identity ID</h3>
+                  {/* Status badge */}
+                  <div className="shrink-0">
+                    {isDone ? (
+                      <div className="w-7 h-7 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </div>
+                    ) : isActive ? (
+                      <div className="w-7 h-7 rounded-full bg-caramel/20 flex items-center justify-center">
+                        <div className="w-2.5 h-2.5 rounded-full bg-caramel animate-pulse" />
+                      </div>
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-surface border border-border flex items-center justify-center">
+                        <div className="w-2 h-2 rounded-full bg-muted/30" />
+                      </div>
+                    )}
+                  </div>
+                </button>
+
+                {/* Expandable content area */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateRows: isActive ? '1fr' : '0fr',
+                    transition: 'grid-template-rows 400ms cubic-bezier(0.4, 0, 0.2, 1)',
+                  }}
+                >
+                  <div className="overflow-hidden">
+                    <div className="px-4 pb-5 md:px-6 md:pb-6">
+                      {step.content}
+
+                      <button
+                        onClick={(e) => { e.stopPropagation(); markDone(i); }}
+                        className="mt-6 flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-caramel to-caramel-light text-surface text-sm font-bold shadow-lg shadow-caramel/25 hover:shadow-caramel/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+                      >
+                        {step.buttonText}
+                        {i < 2 ? (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="5" y1="12" x2="19" y2="12" />
+                            <polyline points="12 5 19 12 12 19" />
+                          </svg>
+                        ) : (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-xs text-muted leading-relaxed">When the shortcut runs for the first time it will ask for your ID. Copy yours below and paste it in.</p>
               </div>
-            </div>
-            <CopyField value={identityId} />
-          </div>
+            );
+          })}
         </div>
 
-        {/* 24 h notice */}
-        <div className="flex items-center gap-3 bg-surface-card border border-caramel/20 rounded-xl px-4 py-3 md:rounded-2xl md:px-6 md:py-4 max-w-lg mx-auto">
-          <span className="text-xl md:text-2xl shrink-0">⏳</span>
+        {/* 24 h notice / success */}
+        <div
+          className={`mt-8 flex items-center gap-3 bg-surface-card border rounded-xl px-4 py-3 md:rounded-2xl md:px-6 md:py-4 max-w-lg mx-auto transition-all duration-500 ${
+            allDone ? 'border-emerald-500/30' : 'border-caramel/20'
+          }`}
+        >
+          <span className="text-xl md:text-2xl shrink-0">{allDone ? '\uD83C\uDF89' : '\u23F3'}</span>
           <p className="text-xs md:text-sm text-muted leading-relaxed">
-            <span className="text-cream font-semibold">Please allow at least 24 hours</span> after your first shortcut run for your data to appear here.
+            {allDone ? (
+              <>
+                <span className="text-emerald-400 font-semibold">You're all set!</span>{' '}
+                Your screen time data will appear here within 24 hours after the shortcut runs for the first time.
+              </>
+            ) : (
+              <>
+                <span className="text-cream font-semibold">Please allow at least 24 hours</span>{' '}
+                after your first shortcut run for your data to appear here.
+              </>
+            )}
           </p>
         </div>
 
