@@ -1,6 +1,6 @@
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, PutCommand, QueryCommand } = require('@aws-sdk/lib-dynamodb');
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -11,22 +11,70 @@ const headers = { 'Content-Type': 'application/json' };
 const res = (statusCode, body) => ({ statusCode, headers, body: JSON.stringify(body) });
 const getUserId = (event) => event.requestContext?.authorizer?.jwt?.claims?.sub;
 
+// Parse comma-separated entries: "Google Chrome (2h 13m),Spotify (6m),iTerm (52s)"
+function parseEntries(str) {
+  return str.split(/,(?=\s*[A-Za-z])/).map(part => {
+    const clean = part.replace(/[\u200E\u200F\u200B-\u200D\uFEFF]/g, '').trim();
+    const match = clean.match(/^(.+?)\s*\((?:(\d+)h)?\s*(?:(\d+)m)?\s*(?:(\d+)s)?\)$/i);
+    if (!match) return null;
+    const app = match[1].trim();
+    const minutes = parseInt(match[2] || '0', 10) * 60
+      + parseInt(match[3] || '0', 10)
+      + (parseInt(match[4] || '0', 10) >= 30 ? 1 : 0);
+    if (!app || minutes === 0) return null;
+    return { app, minutes };
+  }).filter(Boolean);
+}
+
+// Read existing all.json for a deviceKey, or return empty structure
+async function readAllJson(deviceKey) {
+  try {
+    const resp = await s3.send(new GetObjectCommand({
+      Bucket: DATA_BUCKET,
+      Key: `${deviceKey}/all.json`,
+    }));
+    const text = await resp.Body.transformToString();
+    return JSON.parse(text);
+  } catch (err) {
+    if (err.name === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404) {
+      return { days: {} };
+    }
+    if (err instanceof SyntaxError) {
+      console.error('Corrupted all.json for', deviceKey);
+      return { days: {} };
+    }
+    throw err;
+  }
+}
+
 // POST /ingest — phone devices send screen time data, stored as JSON in S3
 module.exports.ingest = async (event) => {
   try {
     const apiKey = event.headers?.['x-api-key'];
     if (apiKey !== process.env.API_KEY) return res(401, { error: 'Unauthorized' });
 
-    const { deviceKey, date, entries } = JSON.parse(event.body);
-    if (!deviceKey || !date || !Array.isArray(entries)) {
+    let raw = event.body || '';
+    if (event.isBase64Encoded) raw = Buffer.from(raw, 'base64').toString('utf-8');
+
+    const parsed = JSON.parse(raw);
+    const { deviceKey, date, systemVersion, deviceName } = parsed;
+
+    const entries = typeof parsed.entries === 'string'
+      ? parseEntries(parsed.entries)
+      : parsed.entries;
+
+    if (!deviceKey || !date || !Array.isArray(entries) || entries.length === 0) {
       return res(400, { error: 'Missing deviceKey, date, or entries' });
     }
 
-    // Store as s3://{bucket}/{deviceKey}/{date}.json
+    // Read existing all.json, upsert this day, write back
+    const allData = await readAllJson(deviceKey);
+    allData.days[date] = { entries, systemVersion, deviceName };
+
     await s3.send(new PutObjectCommand({
       Bucket: DATA_BUCKET,
-      Key: `${deviceKey}/${date}.json`,
-      Body: JSON.stringify(entries),
+      Key: `${deviceKey}/all.json`,
+      Body: JSON.stringify(allData),
       ContentType: 'application/json',
     }));
 
@@ -34,6 +82,59 @@ module.exports.ingest = async (event) => {
   } catch (err) {
     console.error('Ingest error:', err);
     return res(500, { error: 'Ingest failed' });
+  }
+};
+
+// POST /ingest/bulk — backfill up to 90 days at once
+module.exports.ingestBulk = async (event) => {
+  try {
+    const apiKey = event.headers?.['x-api-key'];
+    if (apiKey !== process.env.API_KEY) return res(401, { error: 'Unauthorized' });
+
+    let raw = event.body || '';
+    if (event.isBase64Encoded) raw = Buffer.from(raw, 'base64').toString('utf-8');
+
+    const parsed = JSON.parse(raw);
+    const { deviceKey, days } = parsed;
+
+    if (!deviceKey || !days || typeof days !== 'object') {
+      return res(400, { error: 'Missing deviceKey or days object' });
+    }
+
+    const dateKeys = Object.keys(days);
+    if (dateKeys.length === 0) return res(400, { error: 'No days provided' });
+    if (dateKeys.length > 90) return res(400, { error: 'Maximum 90 days per bulk request' });
+
+    // Validate and parse each day's entries
+    for (const [date, dayData] of Object.entries(days)) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res(400, { error: `Invalid date format: ${date}` });
+      }
+      if (typeof dayData.entries === 'string') {
+        days[date] = { ...dayData, entries: parseEntries(dayData.entries) };
+      }
+      if (!Array.isArray(days[date].entries) || days[date].entries.length === 0) {
+        return res(400, { error: `Missing or empty entries for date: ${date}` });
+      }
+    }
+
+    // Read existing all.json, merge all days, write back
+    const allData = await readAllJson(deviceKey);
+    for (const [date, dayData] of Object.entries(days)) {
+      allData.days[date] = dayData;
+    }
+
+    await s3.send(new PutObjectCommand({
+      Bucket: DATA_BUCKET,
+      Key: `${deviceKey}/all.json`,
+      Body: JSON.stringify(allData),
+      ContentType: 'application/json',
+    }));
+
+    return res(200, { stored: dateKeys.length, totalDays: Object.keys(allData.days).length });
+  } catch (err) {
+    console.error('IngestBulk error:', err);
+    return res(500, { error: 'Bulk ingest failed' });
   }
 };
 

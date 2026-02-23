@@ -20,11 +20,14 @@ export default function AppShell() {
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
+    console.log('AppShell useEffect triggered with user:', user);
+    console.log(!user?.credentials || !user?.identityId ? 'Missing credentials or identityId' : 'Credentials and identityId are present')
     if (!user?.credentials || !user?.identityId) return;
     fetchScreenTimeData(user.credentials, user.identityId)
       .then(setData)
-      .catch(() => {
+      .catch((e) => {
         // Fallback to sample data during development
+        console.log('Error fetching screen time data, loading sample data instead:', e);
         fetch('/sample-data.json').then(r => r.json()).then(setData).catch(() => {});
       });
   }, [user]);

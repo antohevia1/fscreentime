@@ -40,6 +40,7 @@ provider:
         - Effect: Allow
           Action:
             - s3:PutObject
+            - s3:GetObject
           Resource:
             - !Sub 'arn:aws:s3:::${self:provider.environment.DATA_BUCKET}/*'
 
@@ -50,6 +51,16 @@ functions:
     events:
       - httpApi:
           path: /ingest
+          method: post
+    environment:
+      API_KEY: ${env:INGEST_API_KEY, 'REPLACE_ME'}
+
+  ingestBulk:
+    handler: handler.ingestBulk
+    timeout: 30
+    events:
+      - httpApi:
+          path: /ingest/bulk
           method: post
     environment:
       API_KEY: ${env:INGEST_API_KEY, 'REPLACE_ME'}
@@ -210,18 +221,22 @@ resources:
             PolicyDocument:
               Version: '2012-10-17'
               Statement:
-                # Users can only read/list their own prefix
+                # Users can only list objects under their own prefix
                 - Effect: Allow
                   Action:
-                    - s3:GetObject
                     - s3:ListBucket
                   Resource:
                     - !Sub 'arn:aws:s3:::${self:provider.environment.DATA_BUCKET}'
-                    - !Sub 'arn:aws:s3:::${self:provider.environment.DATA_BUCKET}/${!cognito-identity.amazonaws.com:sub}/*'
                   Condition:
                     StringLike:
                       's3:prefix':
                         - !Sub '${!cognito-identity.amazonaws.com:sub}/*'
+                # Users can only read objects under their own prefix
+                - Effect: Allow
+                  Action:
+                    - s3:GetObject
+                  Resource:
+                    - !Sub 'arn:aws:s3:::${self:provider.environment.DATA_BUCKET}/${!cognito-identity.amazonaws.com:sub}/*'
 
     # ── DynamoDB (goals only) ────────────────────────────────
     GoalsTable:

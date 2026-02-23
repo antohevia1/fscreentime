@@ -9,7 +9,7 @@ export function parseScreenTimeData(raw) {
   if (raw.length > 0 && (raw[0].app || raw[0].application || raw[0].name)) {
     return raw.map(entry => ({
       app: entry.app || entry.application || entry.name || 'Unknown',
-      minutes: parseFloat(entry.time || entry.duration || entry.screenTime || 0),
+      minutes: parseFloat(entry.minutes || entry.time || entry.duration || entry.screenTime || 0),
       date: entry.date || entry.timestamp || 'Unknown',
     }));
   }

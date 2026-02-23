@@ -1,4 +1,4 @@
-import { S3Client, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 
 const BUCKET = import.meta.env.VITE_DATA_BUCKET;
 const REGION = import.meta.env.VITE_AWS_REGION || 'us-east-1';
@@ -6,26 +6,26 @@ const REGION = import.meta.env.VITE_AWS_REGION || 'us-east-1';
 export async function fetchScreenTimeData(credentials, identityId) {
   const s3 = new S3Client({ region: REGION, credentials });
 
-  // List all date files for this user: {identityId}/{date}.json
-  const list = await s3.send(new ListObjectsV2Command({
-    Bucket: BUCKET,
-    Prefix: `${identityId}/`,
-  }));
+  let resp;
+  try {
+    resp = await s3.send(new GetObjectCommand({
+      Bucket: BUCKET,
+      Key: `${identityId}/all.json`,
+    }));
+  } catch (err) {
+    if (err.name === 'NoSuchKey' || err.$metadata?.httpStatusCode === 403 || err.$metadata?.httpStatusCode === 404) {
+      return []; // No data yet
+    }
+    throw err;
+  }
 
-  if (!list.Contents?.length) return [];
+  const text = await resp.Body.transformToString();
+  const allData = JSON.parse(text);
 
-  // Fetch all JSON files in parallel
-  const fetches = list.Contents
-    .filter(obj => obj.Key.endsWith('.json'))
-    .map(async (obj) => {
-      const resp = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: obj.Key }));
-      const text = await resp.Body.transformToString();
-      const entries = JSON.parse(text);
-      // Extract date from key: {identityId}/{date}.json
-      const date = obj.Key.split('/').pop().replace('.json', '');
-      return entries.map(e => ({ ...e, date: e.date || date }));
-    });
+  if (!allData.days) return [];
 
-  const results = await Promise.all(fetches);
-  return results.flat();
+  return Object.entries(allData.days).flatMap(([date, dayData]) => {
+    const entries = Array.isArray(dayData) ? dayData : dayData.entries || [];
+    return entries.map(e => ({ ...e, date }));
+  });
 }
