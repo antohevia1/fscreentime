@@ -49,6 +49,7 @@ jobs:
           VITE_AWS_REGION: ${{ env.AWS_REGION }}
           VITE_REDIRECT_SIGN_IN: https://www.${{ env.PROD_DOMAIN }}/app
           VITE_REDIRECT_SIGN_OUT: https://www.${{ env.PROD_DOMAIN }}/
+          VITE_SHORTCUT_URL: ${{ secrets.VITE_SHORTCUT_URL }}
 
       # Cache hashed assets for 1 year, index.html never cached
       - name: Sync assets to S3
