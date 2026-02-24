@@ -50,6 +50,7 @@ jobs:
           VITE_REDIRECT_SIGN_IN: https://www.${{ env.PROD_DOMAIN }}/app
           VITE_REDIRECT_SIGN_OUT: https://www.${{ env.PROD_DOMAIN }}/
           VITE_SHORTCUT_URL: ${{ secrets.VITE_SHORTCUT_URL }}
+          VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}
 
       # Cache hashed assets for 1 year, index.html never cached
       - name: Sync assets to S3

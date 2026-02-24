@@ -17,7 +17,10 @@ provider:
   timeout: 10
   environment:
     DYNAMODB_GOALS_TABLE: ${self:service}-${sls:stage}-goals
+    DYNAMODB_PAYMENTS_TABLE: ${self:service}-${sls:stage}-payments
     DATA_BUCKET: ${self:service}-${sls:stage}-data
+    STRIPE_SECRET_KEY: ${env:STRIPE_SECRET_KEY, 'REPLACE_ME'}
+    STRIPE_WEBHOOK_SECRET: ${env:STRIPE_WEBHOOK_SECRET, 'REPLACE_ME'}
     STAGE: ${sls:stage}
   httpApi:
     cors: true
@@ -34,9 +37,19 @@ provider:
         - Effect: Allow
           Action:
             - dynamodb:PutItem
+            - dynamodb:GetItem
+            - dynamodb:UpdateItem
             - dynamodb:Query
+            - dynamodb:Scan
           Resource:
             - !GetAtt GoalsTable.Arn
+        - Effect: Allow
+          Action:
+            - dynamodb:PutItem
+            - dynamodb:GetItem
+            - dynamodb:UpdateItem
+          Resource:
+            - !GetAtt PaymentsTable.Arn
         - Effect: Allow
           Action:
             - s3:PutObject
@@ -88,6 +101,32 @@ functions:
           method: get
           authorizer:
             name: cognitoAuthorizer
+
+  # ── Stripe payment endpoints ──────────────────────────────
+  createSetupIntent:
+    handler: stripe.createSetupIntent
+    events:
+      - httpApi:
+          path: /create-setup-intent
+          method: post
+          authorizer:
+            name: cognitoAuthorizer
+
+  stripeWebhook:
+    handler: stripe.stripeWebhook
+    events:
+      - httpApi:
+          path: /stripe-webhook
+          method: post
+
+  # Penalty processor — runs every Monday at 08:00 UTC
+  processPenalties:
+    handler: stripe.processPenalties
+    timeout: 120
+    events:
+      - schedule:
+          rate: cron(0 8 ? * MON *)
+          enabled: true
 
 resources:
   Conditions:
@@ -243,7 +282,7 @@ resources:
                   Resource:
                     - !Sub 'arn:aws:s3:::${self:provider.environment.DATA_BUCKET}/${!cognito-identity.amazonaws.com:sub}/*'
 
-    # ── DynamoDB (goals only) ────────────────────────────────
+    # ── DynamoDB ─────────────────────────────────────────────
     GoalsTable:
       Type: AWS::DynamoDB::Table
       Properties:
@@ -262,6 +301,18 @@ resources:
         TimeToLiveSpecification:
           AttributeName: ttl
           Enabled: true
+
+    PaymentsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.DYNAMODB_PAYMENTS_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
 
     # ── S3 (screen time data, partitioned per user) ──────────
     DataBucket:

@@ -1,6 +1,9 @@
 import { useState, useMemo, useRef } from 'react';
 import Chart from 'react-apexcharts';
+import axios from 'axios';
 import { parseScreenTimeData } from '../utils/parseData';
+import { useAuth } from '../context/AuthContext';
+import StripePayment from '../components/StripePayment';
 
 const CHARITIES = [
   { id: 'redcross', name: 'Red Cross', emoji: '🏥', desc: 'Disaster relief and humanitarian aid worldwide' },
@@ -55,7 +58,11 @@ function getChallengeRange() {
   return { startStr: toDateStr(start), endStr: toDateStr(end), numDays };
 }
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 export default function Goals({ data }) {
+  const { user } = useAuth();
+
   const [goal, setGoal] = useState(() => {
     const saved = localStorage.getItem('st_goal');
     return saved ? JSON.parse(saved) : null;
@@ -66,10 +73,36 @@ export default function Goals({ data }) {
   const [showInfo, setShowInfo] = useState(false);
   const charityRef = useRef(null);
 
+  // Payment flow state
+  const [paymentStep, setPaymentStep] = useState(null); // null | 'loading' | 'card_entry' | 'error'
+  const [clientSecret, setClientSecret] = useState(null);
+  const [paymentError, setPaymentError] = useState(null);
+  const pendingGoalRef = useRef(null);
+
   const range = getChallengeRange();
   const weeklyBudget = +(dailyLimit * range.numDays).toFixed(1);
 
-  const saveGoal = (e) => {
+  // Activate the goal: save to backend + localStorage
+  const activateGoal = async (g) => {
+    try {
+      await axios.post(`${API_URL}/goals`, {
+        ...g,
+        identityId: user?.identityId,
+        status: 'active',
+      }, {
+        headers: { Authorization: `Bearer ${user?.token}` },
+      });
+    } catch (err) {
+      console.error('Failed to save goal to backend:', err);
+    }
+
+    localStorage.setItem('st_goal', JSON.stringify(g));
+    setGoal(g);
+    setPaymentStep(null);
+  };
+
+  // "Accept Challenge" → create setup intent → show card form (or skip if card on file)
+  const saveGoal = async (e) => {
     e.preventDefault();
     const charity = CHARITIES.find(c => c.id === selectedCharity);
     const g = {
@@ -77,18 +110,119 @@ export default function Goals({ data }) {
       weeklyLimit: weeklyBudget,
       charity: charity.name,
       charityId: charity.id,
-      amount: 5,
+      amount: 10,
       createdAt: new Date().toISOString(),
       weekStart: range.startStr,
       weekEnd: range.endStr,
       numDays: range.numDays,
     };
-    localStorage.setItem('st_goal', JSON.stringify(g));
-    setGoal(g);
+
+    pendingGoalRef.current = g;
+    setPaymentStep('loading');
+    setPaymentError(null);
+
+    try {
+      const resp = await axios.post(`${API_URL}/create-setup-intent`, {
+        email: user?.email,
+      }, {
+        headers: { Authorization: `Bearer ${user?.token}` },
+      });
+
+      if (resp.data.already_setup) {
+        await activateGoal(g);
+      } else {
+        setClientSecret(resp.data.client_secret);
+        setPaymentStep('card_entry');
+      }
+    } catch (err) {
+      console.error('Setup intent error:', err);
+      setPaymentError('Failed to initialize payment. Please try again.');
+      setPaymentStep('error');
+    }
+  };
+
+  const handlePaymentSuccess = async () => {
+    if (pendingGoalRef.current) {
+      await activateGoal(pendingGoalRef.current);
+    }
+  };
+
+  const handlePaymentError = (err) => {
+    setPaymentError(err.message || 'Payment setup failed');
   };
 
   const clearGoal = () => { localStorage.removeItem('st_goal'); setGoal(null); };
 
+  // ── Payment loading spinner ─────────────────────────────────
+  if (paymentStep === 'loading') {
+    return (
+      <div className="flex items-center justify-center min-h-[70vh]">
+        <div className="bg-surface-card border border-border rounded-xl p-8 max-w-lg w-full text-center">
+          <div className="animate-pulse">
+            <span className="text-4xl block mb-4">💳</span>
+            <p className="text-cream">Setting up payment...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Card entry step (Stripe Elements) ───────────────────────
+  if (paymentStep === 'card_entry' && clientSecret) {
+    const charity = CHARITIES.find(c => c.id === selectedCharity);
+    return (
+      <div className="flex items-center justify-center min-h-[70vh]">
+        <div className="bg-surface-card border border-border rounded-xl p-8 max-w-lg w-full">
+          <h2 className="text-xl font-semibold text-cream mb-2">Skin in the Game</h2>
+          <p className="text-sm text-muted mb-6 leading-relaxed">
+            Add your card to activate the challenge. You won't be charged now — only if you fail your weekly goal.
+          </p>
+
+          <div className="bg-surface-light rounded-lg p-4 border border-border mb-6 space-y-2">
+            <p className="text-sm text-muted">If you exceed <span className="text-cream">{weeklyBudget}h</span> this period:</p>
+            <p className="text-caramel font-semibold">$10.00 → {charity?.name}</p>
+            <div className="flex gap-4 text-xs text-muted pt-1 border-t border-border/50">
+              <span>Donation: <span className="text-cream">$9.00</span></span>
+              <span>Service fee (10%): <span className="text-cream">$1.00</span></span>
+            </div>
+          </div>
+
+          <StripePayment
+            clientSecret={clientSecret}
+            onSuccess={handlePaymentSuccess}
+            onError={handlePaymentError}
+          />
+
+          <button
+            onClick={() => { setPaymentStep(null); setClientSecret(null); }}
+            className="w-full mt-3 py-2 text-sm text-muted hover:text-cream transition"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Payment error ───────────────────────────────────────────
+  if (paymentStep === 'error') {
+    return (
+      <div className="flex items-center justify-center min-h-[70vh]">
+        <div className="bg-surface-card border border-border rounded-xl p-8 max-w-lg w-full text-center">
+          <span className="text-4xl block mb-4">⚠️</span>
+          <p className="text-red-400 mb-4">{paymentError}</p>
+          <button
+            onClick={() => { setPaymentStep(null); setPaymentError(null); }}
+            className="py-2 px-6 rounded-lg bg-caramel text-surface font-semibold text-sm hover:bg-caramel-light transition"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Goal setup form ─────────────────────────────────────────
   if (!goal) {
     return (
       <div className="flex items-center justify-center min-h-[70vh]">
@@ -96,7 +230,7 @@ export default function Goals({ data }) {
           <h2 className="text-xl font-semibold text-cream mb-2">Set Your Weekly Challenge</h2>
           <p className="text-sm text-muted mb-6 leading-relaxed">
             Choose a daily screen time limit. Your budget for this period is <span className="text-caramel">{weeklyBudget}h</span> ({range.numDays} days).
-            Miss it, and your $5 goes to charity.
+            Miss it, and your $10 goes to charity.
           </p>
 
           {/* Challenge period */}
@@ -160,10 +294,10 @@ export default function Goals({ data }) {
 
             <div className="bg-surface-light rounded-lg p-4 border border-border space-y-2">
               <p className="text-sm text-muted">If you exceed <span className="text-cream">{weeklyBudget}h</span> this period:</p>
-              <p className="text-caramel font-semibold">$5.00 → {CHARITIES.find(c => c.id === selectedCharity)?.name}</p>
+              <p className="text-caramel font-semibold">$10.00 → {CHARITIES.find(c => c.id === selectedCharity)?.name}</p>
               <div className="flex gap-4 text-xs text-muted pt-1 border-t border-border/50">
-                <span>Donation: <span className="text-cream">$4.50</span></span>
-                <span>Service fee (10%): <span className="text-cream">$0.50</span></span>
+                <span>Donation: <span className="text-cream">$9.00</span></span>
+                <span>Service fee (10%): <span className="text-cream">$1.00</span></span>
               </div>
             </div>
             <button type="submit"
@@ -263,6 +397,7 @@ function GoalProgress({ goal, data, onClear }) {
     },
   };
 
+  const stakeAmount = goal.amount || 10;
   const hasData = stats.weekHours > 0;
 
   return (
@@ -271,9 +406,9 @@ function GoalProgress({ goal, data, onClear }) {
         <div>
           <h2 className="text-xl font-semibold text-cream">Weekly Challenge</h2>
           <p className="text-sm text-muted mt-1">
-            {fmtDate(goal.weekStart)} → {fmtDate(goal.weekEnd)} · {goal.numDays || 7} days · {goal.dailyLimit}h/day · {goal.weeklyLimit}h total · $5 → {goal.charity}
+            {fmtDate(goal.weekStart)} → {fmtDate(goal.weekEnd)} · {goal.numDays || 7} days · {goal.dailyLimit}h/day · {goal.weeklyLimit}h total · ${stakeAmount} → {goal.charity}
           </p>
-          <p className="text-xs text-muted mt-0.5">Donation: $4.50 · Service fee (10%): $0.50</p>
+          <p className="text-xs text-muted mt-0.5">Donation: ${(stakeAmount * 0.9).toFixed(2)} · Service fee (10%): ${(stakeAmount * 0.1).toFixed(2)}</p>
         </div>
         <button onClick={onClear}
           className="text-xs text-muted hover:text-cream border border-border rounded-lg px-3 py-1.5 hover:border-caramel/40 transition">
@@ -298,7 +433,7 @@ function GoalProgress({ goal, data, onClear }) {
           { label: 'Used', value: `${stats.weekHours.toFixed(1)}h`, color: 'text-cream' },
           { label: 'Budget', value: `${stats.goalHours}h`, color: 'text-caramel' },
           { label: 'Remaining', value: stats.onTrack ? `${stats.remaining.toFixed(1)}h` : `Over by ${stats.overBy.toFixed(1)}h`, color: stats.onTrack ? 'text-emerald-400' : 'text-red-400' },
-          { label: 'Stake', value: stats.onTrack ? 'Safe ✓' : `$5 → ${goal.charity}`, color: stats.onTrack ? 'text-emerald-400' : 'text-red-400' },
+          { label: 'Stake', value: stats.onTrack ? 'Safe ✓' : `$${stakeAmount} → ${goal.charity}`, color: stats.onTrack ? 'text-emerald-400' : 'text-red-400' },
         ].map((s, i) => (
           <div key={i} className="bg-surface-card border border-border rounded-xl p-4">
             <p className="text-[11px] uppercase tracking-wide text-muted">{s.label}</p>
