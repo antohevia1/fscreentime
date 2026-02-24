@@ -26,6 +26,26 @@ function parseEntries(str) {
   }).filter(Boolean);
 }
 
+const MONTHS = { Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',
+                  Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12' };
+
+// Parse "Mon, 23 Feb 2026 20:50:51 GMT+11" → { localDate, timezone, tzOffsetHours }
+// Also accepts plain "YYYY-MM-DD" for backward compatibility.
+function parseDateStr(dateStr) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return { localDate: dateStr, timezone: null, tzOffsetHours: null };
+  }
+  const m = dateStr.match(/\w+,\s+(\d+)\s+(\w+)\s+(\d{4})\s+[\d:]+\s+GMT([+-]\d+)/);
+  if (!m) return { localDate: null, timezone: null, tzOffsetHours: null };
+  const month = MONTHS[m[2]];
+  if (!month) return { localDate: null, timezone: null, tzOffsetHours: null };
+  return {
+    localDate: `${m[3]}-${month}-${m[1].padStart(2, '0')}`,
+    timezone: `GMT${m[4]}`,
+    tzOffsetHours: parseInt(m[4], 10),
+  };
+}
+
 // Read existing all.json for a deviceKey, or return empty structure
 async function readAllJson(deviceKey) {
   try {
@@ -57,11 +77,14 @@ module.exports.ingest = async (event) => {
     if (event.isBase64Encoded) raw = Buffer.from(raw, 'base64').toString('utf-8');
 
     const parsed = JSON.parse(raw);
-    const { deviceKey, date, systemVersion, deviceName } = parsed;
+    const { deviceKey, date: rawDate, systemVersion, deviceName } = parsed;
 
     const entries = typeof parsed.entries === 'string'
       ? parseEntries(parsed.entries)
       : parsed.entries;
+
+    // Support both "YYYY-MM-DD" and "Mon, 23 Feb 2026 20:50:51 GMT+11"
+    const { localDate: date, timezone, tzOffsetHours } = parseDateStr(rawDate);
 
     if (!deviceKey || !date || !Array.isArray(entries) || entries.length === 0) {
       return res(400, { error: 'Missing deviceKey, date, or entries' });
@@ -70,6 +93,12 @@ module.exports.ingest = async (event) => {
     // Read existing all.json, upsert this day, write back
     const allData = await readAllJson(deviceKey);
     allData.days[date] = { entries, systemVersion, deviceName };
+
+    // Persist the customer's timezone from the most recent ingest
+    if (timezone) {
+      allData.timezone = timezone;
+      allData.tzOffsetHours = tzOffsetHours;
+    }
 
     await s3.send(new PutObjectCommand({
       Bucket: DATA_BUCKET,

@@ -151,7 +151,29 @@ export default function Goals({ data }) {
     setPaymentError(err.message || 'Payment setup failed');
   };
 
-  const clearGoal = () => { localStorage.removeItem('st_goal'); setGoal(null); };
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelError, setCancelError] = useState(null);
+
+  const clearGoal = async () => {
+    setCancelLoading(true);
+    setCancelError(null);
+    try {
+      await axios.post(`${API_URL}/goals/cancel`, {
+        weekStart: goal?.weekStart,
+      }, {
+        headers: { Authorization: `Bearer ${user?.token}` },
+      });
+      localStorage.removeItem('st_goal');
+      setGoal(null);
+      setShowResetConfirm(false);
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Failed to process cancellation';
+      setCancelError(msg);
+    } finally {
+      setCancelLoading(false);
+    }
+  };
 
   // ── Payment loading spinner ─────────────────────────────────
   if (paymentStep === 'loading') {
@@ -310,10 +332,12 @@ export default function Goals({ data }) {
     );
   }
 
-  return <GoalProgress goal={goal} data={data} onClear={clearGoal} />;
+  return <GoalProgress goal={goal} data={data} onClear={clearGoal}
+    showResetConfirm={showResetConfirm} setShowResetConfirm={setShowResetConfirm}
+    cancelLoading={cancelLoading} cancelError={cancelError} />;
 }
 
-function GoalProgress({ goal, data, onClear }) {
+function GoalProgress({ goal, data, onClear, showResetConfirm, setShowResetConfirm, cancelLoading, cancelError }) {
   const parsed = useMemo(() => data ? parseScreenTimeData(data) : [], [data]);
 
   const stats = useMemo(() => {
@@ -410,11 +434,35 @@ function GoalProgress({ goal, data, onClear }) {
           </p>
           <p className="text-xs text-muted mt-0.5">Donation: ${(stakeAmount * 0.9).toFixed(2)} · Service fee (10%): ${(stakeAmount * 0.1).toFixed(2)}</p>
         </div>
-        <button onClick={onClear}
+        <button onClick={() => setShowResetConfirm(true)}
           className="text-xs text-muted hover:text-cream border border-border rounded-lg px-3 py-1.5 hover:border-caramel/40 transition">
           Reset Goal
         </button>
       </div>
+
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="bg-surface-card border border-border rounded-xl p-6 max-w-sm w-full space-y-4">
+            <h3 className="text-lg font-semibold text-cream">Forfeit your stake?</h3>
+            <p className="text-sm text-muted leading-relaxed">
+              Resetting your goal counts as giving up. Your <span className="text-red-400 font-semibold">${stakeAmount}.00</span> will
+              be charged and donated to <span className="text-cream">{goal.charity}</span>.
+            </p>
+            <p className="text-xs text-muted">This action cannot be undone.</p>
+            {cancelError && <p className="text-sm text-red-400">{cancelError}</p>}
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setShowResetConfirm(false)} disabled={cancelLoading}
+                className="flex-1 py-2.5 rounded-lg border border-border text-sm text-muted hover:text-cream hover:border-caramel/40 transition disabled:opacity-50">
+                Keep Challenge
+              </button>
+              <button onClick={onClear} disabled={cancelLoading}
+                className="flex-1 py-2.5 rounded-lg bg-red-500/20 border border-red-500/40 text-sm text-red-400 font-semibold hover:bg-red-500/30 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                {cancelLoading ? 'Processing...' : `Forfeit $${stakeAmount}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!hasData && (
         <div className="bg-surface-card border border-border rounded-2xl p-10 text-center">

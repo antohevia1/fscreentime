@@ -120,37 +120,112 @@ module.exports.stripeWebhook = async (event) => {
   return res(200, { received: true });
 };
 
-/* ─── Penalty Processor (EventBridge — every Monday 08:00 UTC) ──── */
+/* ─── POST /goals/cancel — user forfeits, charge immediately ─────── */
+module.exports.cancelGoal = async (event) => {
+  try {
+    const userId = getUserId(event);
+    if (!userId) return res(401, { error: 'Unauthorized' });
+
+    const { weekStart } = JSON.parse(event.body || '{}');
+    if (!weekStart) return res(400, { error: 'Missing weekStart' });
+
+    // Look up the goal
+    const goalResult = await ddb.send(new GetCommand({
+      TableName: GOALS_TABLE,
+      Key: { userId, weekStart },
+    }));
+    const goal = goalResult.Item;
+    if (!goal) return res(404, { error: 'Goal not found' });
+    if (goal.status && goal.status !== 'active') {
+      return res(409, { error: `Goal already ${goal.status}` });
+    }
+
+    // Look up payment method
+    const paymentInfo = await ddb.send(new GetCommand({
+      TableName: PAYMENTS_TABLE,
+      Key: { userId },
+    }));
+
+    if (!paymentInfo.Item?.stripe_payment_method_id || !paymentInfo.Item?.stripe_customer_id) {
+      // No card on file — just mark cancelled without charge
+      await ddb.send(new UpdateCommand({
+        TableName: GOALS_TABLE,
+        Key: { userId, weekStart },
+        UpdateExpression: 'SET #st = :v, cancelledAt = :ca',
+        ExpressionAttributeNames: { '#st': 'status' },
+        ExpressionAttributeValues: {
+          ':v': 'cancelled',
+          ':ca': new Date().toISOString(),
+        },
+      }));
+      return res(200, { cancelled: true, charged: false });
+    }
+
+    // Charge the forfeit penalty
+    const idempotencyKey = `cancel-${userId}-${weekStart}`;
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: 1000,           // $10.00
+      currency: 'usd',
+      customer: paymentInfo.Item.stripe_customer_id,
+      payment_method: paymentInfo.Item.stripe_payment_method_id,
+      confirm: true,
+      off_session: true,
+      description: `Goal forfeit for week of ${weekStart}`,
+      metadata: {
+        userId,
+        weekStart,
+        reason: 'user_cancelled',
+        charity: goal.charity || '',
+      },
+    }, { idempotencyKey });
+
+    // Update DynamoDB status to cancelled
+    await ddb.send(new UpdateCommand({
+      TableName: GOALS_TABLE,
+      Key: { userId, weekStart },
+      UpdateExpression: 'SET #st = :v, paymentIntentId = :pi, cancelledAt = :ca',
+      ExpressionAttributeNames: { '#st': 'status' },
+      ExpressionAttributeValues: {
+        ':v': 'cancelled',
+        ':pi': paymentIntent.id,
+        ':ca': new Date().toISOString(),
+      },
+    }));
+
+    return res(200, { cancelled: true, charged: true, paymentIntentId: paymentIntent.id });
+  } catch (err) {
+    if (err.code === 'authentication_required') {
+      return res(402, { error: 'Bank requires additional authentication', code: 'authentication_required' });
+    }
+    console.error('CancelGoal error:', err);
+    return res(500, { error: 'Failed to cancel goal' });
+  }
+};
+
+/* ─── Penalty Processor (EventBridge — hourly on Sun+Mon) ────────── *
+ * Runs every hour. For each active goal whose challenge week is over, *
+ * it reads the customer's timezone from S3 and only processes the     *
+ * goal when it is Monday 9:00 AM in the customer's local time.        *
+ * ──────────────────────────────────────────────────────────────────── */
 module.exports.processPenalties = async () => {
-  console.log('Penalty processor started at', new Date().toISOString());
+  const nowUtc = new Date();
+  console.log('Penalty processor started at', nowUtc.toISOString());
 
-  // Previous Monday → Sunday
-  const now = new Date();
-  const prevMonday = new Date(now);
-  prevMonday.setDate(now.getDate() - 7);
-  const prevSunday = new Date(prevMonday);
-  prevSunday.setDate(prevMonday.getDate() + 6);
-
-  const weekStartStr = toDateStr(prevMonday);
-  const weekEndStr = toDateStr(prevSunday);
-  console.log(`Checking goals for week: ${weekStartStr} → ${weekEndStr}`);
-
-  // Find all active goals for the previous week
+  // Scan for all goals that are still active
   const goalsResult = await ddb.send(new ScanCommand({
     TableName: GOALS_TABLE,
-    FilterExpression: 'weekStart = :ws AND (attribute_not_exists(#st) OR #st = :active)',
+    FilterExpression: 'attribute_not_exists(#st) OR #st = :active',
     ExpressionAttributeNames: { '#st': 'status' },
-    ExpressionAttributeValues: { ':ws': weekStartStr, ':active': 'active' },
+    ExpressionAttributeValues: { ':active': 'active' },
   }));
 
   const goals = goalsResult.Items || [];
-  console.log(`Found ${goals.length} active goals for week ${weekStartStr}`);
+  console.log(`Found ${goals.length} active goals`);
 
-  const results = { processed: 0, charged: 0, passed: 0, errors: 0 };
+  const results = { processed: 0, charged: 0, passed: 0, skipped: 0, errors: 0 };
 
   for (const goal of goals) {
     try {
-      results.processed++;
       const { userId, identityId, weekStart, weekEnd } = goal;
 
       if (!identityId) {
@@ -159,35 +234,56 @@ module.exports.processPenalties = async () => {
         continue;
       }
 
-      // ── Read screen time from S3 ────────────────────────────
-      let screenTimeHours = 0;
+      // ── Read S3 data (screen time + timezone) ───────────────
+      let allData;
       try {
         const s3Resp = await s3.send(new GetObjectCommand({
           Bucket: DATA_BUCKET,
           Key: `${identityId}/all.json`,
         }));
-        const allData = JSON.parse(await s3Resp.Body.transformToString());
-
-        const end = weekEnd || weekEndStr;
-        let totalMinutes = 0;
-        for (const [date, dayData] of Object.entries(allData.days || {})) {
-          if (date >= weekStart && date <= end) {
-            const entries = Array.isArray(dayData) ? dayData : (dayData.entries || []);
-            totalMinutes += entries.reduce((sum, e) => sum + (e.minutes || 0), 0);
-          }
-        }
-        screenTimeHours = totalMinutes / 60;
+        allData = JSON.parse(await s3Resp.Body.transformToString());
       } catch (s3Err) {
         if (s3Err.name === 'NoSuchKey' || s3Err.$metadata?.httpStatusCode === 404) {
-          screenTimeHours = 0; // No data means user passed
+          allData = { days: {} };
         } else {
           throw s3Err;
         }
       }
 
+      // Determine user's local time
+      const offsetHours = typeof allData.tzOffsetHours === 'number' ? allData.tzOffsetHours : 0;
+      const localNow = new Date(nowUtc.getTime() + offsetHours * 3600000);
+      const localDay = localNow.getUTCDay();   // 0=Sun … 1=Mon
+      const localHour = localNow.getUTCHours();
+
+      // Only process when it is Monday 9:XX AM in the customer's timezone
+      if (localDay !== 1 || localHour !== 9) {
+        results.skipped++;
+        continue;
+      }
+
+      // Verify the challenge week is over (weekEnd < today local)
+      const localToday = toDateStr(localNow);
+      if (!weekEnd || weekEnd >= localToday) {
+        results.skipped++;
+        continue;
+      }
+
+      results.processed++;
+
+      // ── Calculate screen time for the challenge week ────────
+      let totalMinutes = 0;
+      for (const [date, dayData] of Object.entries(allData.days || {})) {
+        if (date >= weekStart && date <= weekEnd) {
+          const entries = Array.isArray(dayData) ? dayData : (dayData.entries || []);
+          totalMinutes += entries.reduce((sum, e) => sum + (e.minutes || 0), 0);
+        }
+      }
+      const screenTimeHours = totalMinutes / 60;
+
       const goalHours = goal.weeklyLimit || (goal.dailyLimit * (goal.numDays || 7));
       const failed = screenTimeHours > goalHours;
-      console.log(`User ${userId}: ${screenTimeHours.toFixed(1)}h / ${goalHours}h → ${failed ? 'FAILED' : 'PASSED'}`);
+      console.log(`User ${userId} (${allData.timezone || 'UTC'}): ${screenTimeHours.toFixed(1)}h / ${goalHours}h → ${failed ? 'FAILED' : 'PASSED'}`);
 
       if (!failed) {
         await ddb.send(new UpdateCommand({
