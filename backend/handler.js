@@ -13,7 +13,7 @@ const getUserId = (event) => event.requestContext?.authorizer?.jwt?.claims?.sub;
 
 // Parse comma-separated entries: "Google Chrome (2h 13m),Spotify (6m),iTerm (52s)"
 function parseEntries(str) {
-  return str.split(/,(?=\s*[A-Za-z])/).map(part => {
+  return str.split(/,(?=\s*[A-Za-z0-9])/).map(part => {
     const clean = part.replace(/[\u200E\u200F\u200B-\u200D\uFEFF]/g, '').trim();
     const match = clean.match(/^(.+?)\s*\((?:(\d+)h)?\s*(?:(\d+)m)?\s*(?:(\d+)s)?\)$/i);
     if (!match) return null;
