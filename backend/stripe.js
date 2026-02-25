@@ -222,7 +222,40 @@ module.exports.cancelGoal = async (event) => {
   }
 };
 
-/* ─── Penalty Processor (EventBridge — hourly on Sun+Mon) ────────── *
+/* ─── POST /goals/cancel-renewal — stop auto-renew, no charge ────── */
+module.exports.cancelRenewal = async (event) => {
+  try {
+    const userId = getUserId(event);
+    if (!userId) return res(401, { error: 'Unauthorized' });
+
+    const { weekStart } = JSON.parse(event.body || '{}');
+    if (!weekStart) return res(400, { error: 'Missing weekStart' });
+
+    const goalResult = await ddb.send(new GetCommand({
+      TableName: GOALS_TABLE,
+      Key: { userId, weekStart },
+    }));
+    const goal = goalResult.Item;
+    if (!goal) return res(404, { error: 'Goal not found' });
+    if (goal.status && goal.status !== 'active') {
+      return res(409, { error: `Goal is ${goal.status}, cannot modify renewal` });
+    }
+
+    await ddb.send(new UpdateCommand({
+      TableName: GOALS_TABLE,
+      Key: { userId, weekStart },
+      UpdateExpression: 'SET autoRenew = :ar',
+      ExpressionAttributeValues: { ':ar': false },
+    }));
+
+    return res(200, { success: true, autoRenew: false });
+  } catch (err) {
+    console.error('CancelRenewal error:', err);
+    return res(500, { error: 'Failed to cancel renewal' });
+  }
+};
+
+/* ─── Penalty Processor (EventBridge — hourly on Sun+Mon+Tue) ────── *
  * Runs every hour. For each active goal whose challenge week is over, *
  * it reads the customer's timezone from S3 and only processes the     *
  * goal when it is Monday 9:00 AM in the customer's local time.        *
@@ -340,6 +373,7 @@ module.exports.processPenalties = async () => {
             weekStart, weekEnd, screenTimeHours: screenTimeHours.toFixed(1), goalHours,
           }));
         }
+        await tryRenewGoal(goal, userEmail);
         results.passed++;
         continue;
       }
@@ -400,6 +434,7 @@ module.exports.processPenalties = async () => {
             amount: 1000, charity: goal.charity || '',
           }));
         }
+        await tryRenewGoal(goal, userEmail);
         results.charged++;
       } catch (stripeErr) {
         if (stripeErr.code === 'authentication_required') {
@@ -455,4 +490,59 @@ module.exports.processPenalties = async () => {
 
 function toDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function buildRenewalGoal(goal) {
+  const [y, m, d] = goal.weekEnd.split('-').map(Number);
+  const endSunday = new Date(y, m - 1, d);
+  const nextMonday = new Date(endSunday);
+  nextMonday.setDate(endSunday.getDate() + 1);
+  const nextSunday = new Date(nextMonday);
+  nextSunday.setDate(nextMonday.getDate() + 6);
+
+  return {
+    userId: goal.userId,
+    weekStart: toDateStr(nextMonday),
+    weekEnd: toDateStr(nextSunday),
+    dailyLimit: goal.dailyLimit,
+    weeklyLimit: goal.dailyLimit * 7,
+    numDays: 7,
+    charity: goal.charity,
+    charityId: goal.charityId,
+    amount: goal.amount,
+    identityId: goal.identityId,
+    autoRenew: true,
+    status: 'active',
+    createdAt: new Date().toISOString(),
+    ttl: Math.floor(Date.now() / 1000) + 365 * 24 * 3600,
+    renewedFrom: goal.weekStart,
+  };
+}
+
+async function tryRenewGoal(goal, userEmail) {
+  if (goal.autoRenew === false) return;
+  const renewed = buildRenewalGoal(goal);
+  try {
+    await ddb.send(new PutCommand({
+      TableName: GOALS_TABLE,
+      Item: renewed,
+      ConditionExpression: 'attribute_not_exists(userId)',
+    }));
+    console.log(`Auto-renewed goal for user ${goal.userId}: ${renewed.weekStart} - ${renewed.weekEnd}`);
+    if (userEmail) {
+      await sendEmail(userEmail, templates.goalRenewed(userEmail, {
+        weekStart: renewed.weekStart,
+        weekEnd: renewed.weekEnd,
+        dailyLimit: renewed.dailyLimit,
+        weeklyLimit: renewed.weeklyLimit,
+        charity: renewed.charity,
+      }));
+    }
+  } catch (err) {
+    if (err.name === 'ConditionalCheckFailedException') {
+      console.log(`Renewal goal already exists for user ${goal.userId}: ${renewed.weekStart}`);
+    } else {
+      throw err;
+    }
+  }
 }

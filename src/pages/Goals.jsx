@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import Chart from 'react-apexcharts';
 import axios from 'axios';
 import { parseScreenTimeData } from '../utils/parseData';
@@ -67,6 +67,27 @@ export default function Goals({ data }) {
     const saved = localStorage.getItem('st_goal');
     return saved ? JSON.parse(saved) : null;
   });
+  const [goalLoading, setGoalLoading] = useState(true);
+
+  // Fetch active goal from API on mount (server may have auto-renewed it)
+  useEffect(() => {
+    if (!user?.token) { setGoalLoading(false); return; }
+    axios.get(`${API_URL}/goals`, {
+      params: { status: 'active' },
+      headers: { Authorization: `Bearer ${user.token}` },
+    }).then(resp => {
+      const serverGoal = resp.data;
+      if (serverGoal && serverGoal.status === 'active') {
+        localStorage.setItem('st_goal', JSON.stringify(serverGoal));
+        setGoal(serverGoal);
+      } else if (!serverGoal) {
+        localStorage.removeItem('st_goal');
+        setGoal(null);
+      }
+    }).catch(err => {
+      console.error('Failed to fetch goal from API:', err);
+    }).finally(() => setGoalLoading(false));
+  }, [user?.token]);
 
   const [dailyLimit, setDailyLimit] = useState(2);
   const [selectedCharity, setSelectedCharity] = useState('redcross');
@@ -111,6 +132,7 @@ export default function Goals({ data }) {
       charity: charity.name,
       charityId: charity.id,
       amount: 10,
+      autoRenew: true,
       createdAt: new Date().toISOString(),
       weekStart: range.startStr,
       weekEnd: range.endStr,
@@ -174,6 +196,15 @@ export default function Goals({ data }) {
       setCancelLoading(false);
     }
   };
+
+  // ── Loading goal from API ──────────────────────────────────
+  if (goalLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[70vh]">
+        <p className="text-muted text-sm">Loading goal...</p>
+      </div>
+    );
+  }
 
   // ── Payment loading spinner ─────────────────────────────────
   if (paymentStep === 'loading') {
@@ -322,6 +353,9 @@ export default function Goals({ data }) {
                 <span>Service fee (10%): <span className="text-cream">$1.00</span></span>
               </div>
             </div>
+            <p className="text-xs text-muted text-center">
+              This goal auto-renews weekly. You can cancel renewal anytime from the goal dashboard.
+            </p>
             <button type="submit"
               className="w-full py-3 rounded-lg bg-caramel text-surface font-semibold text-sm hover:bg-caramel-light transition">
               Accept Challenge
@@ -338,6 +372,28 @@ export default function Goals({ data }) {
 }
 
 function GoalProgress({ goal, data, onClear, showResetConfirm, setShowResetConfirm, cancelLoading, cancelError }) {
+  const { user } = useAuth();
+  const [renewalCancelling, setRenewalCancelling] = useState(false);
+  const [renewalCancelled, setRenewalCancelled] = useState(goal.autoRenew === false);
+
+  const cancelAutoRenew = async () => {
+    setRenewalCancelling(true);
+    try {
+      await axios.post(`${API_URL}/goals/cancel-renewal`, {
+        weekStart: goal.weekStart,
+      }, {
+        headers: { Authorization: `Bearer ${user?.token}` },
+      });
+      setRenewalCancelled(true);
+      const updated = { ...goal, autoRenew: false };
+      localStorage.setItem('st_goal', JSON.stringify(updated));
+    } catch (err) {
+      console.error('Failed to cancel renewal:', err);
+    } finally {
+      setRenewalCancelling(false);
+    }
+  };
+
   const parsed = useMemo(() => data ? parseScreenTimeData(data) : [], [data]);
 
   const stats = useMemo(() => {
@@ -433,11 +489,25 @@ function GoalProgress({ goal, data, onClear, showResetConfirm, setShowResetConfi
             {fmtDate(goal.weekStart)} → {fmtDate(goal.weekEnd)} · {goal.numDays || 7} days · {goal.dailyLimit}h/day · {goal.weeklyLimit}h total · ${stakeAmount} → {goal.charity}
           </p>
           <p className="text-xs text-muted mt-0.5">Donation: ${(stakeAmount * 0.9).toFixed(2)} · Service fee (10%): ${(stakeAmount * 0.1).toFixed(2)}</p>
+          {!renewalCancelled && (
+            <p className="text-xs text-caramel mt-1">Auto-renews weekly</p>
+          )}
+          {renewalCancelled && (
+            <p className="text-xs text-muted mt-1">Renewal cancelled — this is your final week</p>
+          )}
         </div>
-        <button onClick={() => setShowResetConfirm(true)}
-          className="text-xs text-muted hover:text-cream border border-border rounded-lg px-3 py-1.5 hover:border-caramel/40 transition">
-          Reset Goal
-        </button>
+        <div className="flex flex-col gap-2 items-end shrink-0">
+          {!renewalCancelled && (
+            <button onClick={cancelAutoRenew} disabled={renewalCancelling}
+              className="text-xs text-muted hover:text-caramel border border-border rounded-lg px-3 py-1.5 hover:border-caramel/40 transition disabled:opacity-50">
+              {renewalCancelling ? 'Cancelling...' : 'Cancel Renewal'}
+            </button>
+          )}
+          <button onClick={() => setShowResetConfirm(true)}
+            className="text-xs text-muted hover:text-cream border border-border rounded-lg px-3 py-1.5 hover:border-caramel/40 transition">
+            Reset Goal
+          </button>
+        </div>
       </div>
 
       {showResetConfirm && (

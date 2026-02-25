@@ -114,6 +114,24 @@ describe('email templates', () => {
     expect(email.html).toContain('No charge was made');
   });
 
+  test('goalRenewed shows next week details', () => {
+    const email = templates.goalRenewed('user@test.com', {
+      weekStart: '2026-02-23',
+      weekEnd: '2026-03-01',
+      dailyLimit: 2,
+      weeklyLimit: 14,
+      charity: 'UNICEF',
+    });
+    expect(email.subject).toContain('2026-02-23');
+    expect(email.subject).toContain('2026-03-01');
+    expect(email.html).toContain('2h');
+    expect(email.html).toContain('14h');
+    expect(email.html).toContain('UNICEF');
+    expect(email.html).toContain('$10.00');
+    expect(email.html).toContain('Cancel Renewal');
+    expect(email.text).toContain('auto-renewal');
+  });
+
   test('contactFormSubmission escapes HTML in message', () => {
     const email = templates.contactFormSubmission({
       name: 'Test User',

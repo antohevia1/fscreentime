@@ -203,6 +203,45 @@ function goalCancelled(email, { weekStart, charged, amount }) {
   };
 }
 
+function goalRenewed(email, { weekStart, weekEnd, dailyLimit, weeklyLimit, charity }) {
+  const content = `
+    <h2 style="margin:0 0 16px;font-size:22px;color:#c4956a;font-weight:600;">Goal Renewed</h2>
+    <p style="margin:0 0 16px;font-size:15px;color:#d4aa80;line-height:1.6;">
+      Your weekly screen time challenge has been automatically renewed for <strong style="color:#f5efe6;">${weekStart}</strong> to <strong style="color:#f5efe6;">${weekEnd}</strong>.
+    </p>
+    <div style="background:#2e2a24;border-radius:8px;padding:16px 20px;margin:16px 0;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+        <tr>
+          <td style="padding:4px 0;font-size:14px;color:#9a8e80;">Daily limit</td>
+          <td align="right" style="padding:4px 0;font-size:14px;color:#f5efe6;font-weight:600;">${dailyLimit}h</td>
+        </tr>
+        <tr>
+          <td style="padding:4px 0;font-size:14px;color:#9a8e80;">Weekly budget</td>
+          <td align="right" style="padding:4px 0;font-size:14px;color:#f5efe6;font-weight:600;">${weeklyLimit}h</td>
+        </tr>
+        <tr>
+          <td style="padding:4px 0;font-size:14px;color:#9a8e80;">Charity</td>
+          <td align="right" style="padding:4px 0;font-size:14px;color:#f5efe6;font-weight:600;">${charity}</td>
+        </tr>
+        <tr>
+          <td style="padding:4px 0;font-size:14px;color:#9a8e80;">Penalty if over</td>
+          <td align="right" style="padding:4px 0;font-size:14px;color:#ef4444;font-weight:600;">$10.00</td>
+        </tr>
+      </table>
+    </div>
+    <p style="margin:16px 0 0;font-size:15px;color:#d4aa80;line-height:1.6;">
+      To stop auto-renewal, visit the app and tap "Cancel Renewal" on your active goal.
+    </p>
+    <a href="${APP_URL}/app/goals" style="display:inline-block;margin-top:16px;padding:12px 24px;background:#c4956a;color:#1a1714;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">
+      View Goal
+    </a>`;
+  return {
+    subject: `Goal renewed: ${weekStart} to ${weekEnd} — fscreentime`,
+    html: baseTemplate('Goal Renewed', content),
+    text: `Goal Renewed\n\nYour weekly screen time challenge has been automatically renewed for ${weekStart} to ${weekEnd}.\n\nDaily limit: ${dailyLimit}h\nWeekly budget: ${weeklyLimit}h\nCharity: ${charity}\nPenalty if over: $10.00\n\nTo stop auto-renewal, visit ${APP_URL}/app/goals and tap "Cancel Renewal".`,
+  };
+}
+
 function contactFormSubmission({ name, email, rating, message }) {
   const stars = rating ? '★'.repeat(rating) + '☆'.repeat(5 - rating) : 'Not rated';
   const content = `
@@ -274,6 +313,7 @@ module.exports = {
     penaltyCharged,
     chargeFailed,
     goalCancelled,
+    goalRenewed,
     contactFormSubmission,
   },
   escapeHtml,

@@ -19,6 +19,7 @@ jest.mock('@aws-sdk/lib-dynamodb', () => ({
 jest.mock('@aws-sdk/client-s3', () => ({
   S3Client: jest.fn(() => ({ send: mockS3Send })),
   GetObjectCommand: jest.fn((p) => ({ _type: 'GetObjectCommand', ...p })),
+  PutObjectCommand: jest.fn((p) => ({ _type: 'PutObjectCommand', ...p })),
 }));
 jest.mock('stripe', () => jest.fn(() => mockStripe));
 
@@ -31,6 +32,7 @@ jest.mock('../email', () => ({
     penaltyCharged: jest.fn(() => ({ subject: 'test', html: '<p>test</p>', text: 'test' })),
     chargeFailed: jest.fn(() => ({ subject: 'test', html: '<p>test</p>', text: 'test' })),
     goalCancelled: jest.fn(() => ({ subject: 'test', html: '<p>test</p>', text: 'test' })),
+    goalRenewed: jest.fn(() => ({ subject: 'test', html: '<p>test</p>', text: 'test' })),
   },
 }));
 
@@ -422,6 +424,7 @@ describe('processPenalties', () => {
         weekStart: '2026-02-16',
         weekEnd: '2026-02-22',
         weeklyLimit: 20,
+        autoRenew: false,
       }],
     });
 
@@ -446,6 +449,7 @@ describe('processPenalties', () => {
         weekStart: '2026-02-16',
         weekEnd: '2026-02-22',
         weeklyLimit: 20,
+        autoRenew: false,
       }],
     });
 
@@ -458,6 +462,7 @@ describe('processPenalties', () => {
       tzOffsetHours: 11,
       timezone: 'GMT+11',
     }));
+    mockS3Send.mockResolvedValueOnce({}); // S3 PutObjectCommand (goal history)
 
     // GetCommand for email lookup
     mockDdbSend.mockResolvedValueOnce({
@@ -486,6 +491,7 @@ describe('processPenalties', () => {
         weekEnd: '2026-02-22',
         weeklyLimit: 10,
         charity: 'UNICEF',
+        autoRenew: false,
       }],
     });
 
@@ -498,6 +504,7 @@ describe('processPenalties', () => {
       },
       tzOffsetHours: 0,
     }));
+    mockS3Send.mockResolvedValueOnce({}); // S3 PutObjectCommand (goal history)
 
     // GetCommand for email + payment info (now single lookup reused)
     mockDdbSend.mockResolvedValueOnce({
@@ -534,6 +541,7 @@ describe('processPenalties', () => {
         weekStart: '2026-02-16',
         weekEnd: '2026-02-22',
         weeklyLimit: 5,
+        autoRenew: false,
       }],
     });
 
@@ -544,6 +552,7 @@ describe('processPenalties', () => {
       },
       tzOffsetHours: 5,
     }));
+    mockS3Send.mockResolvedValueOnce({}); // S3 PutObjectCommand (goal history)
 
     // GetCommand for email+payment — no payment method
     mockDdbSend.mockResolvedValueOnce({ Item: { email: 'p4@test.com' } });
@@ -566,6 +575,7 @@ describe('processPenalties', () => {
         weekStart: '2026-02-16',
         weekEnd: '2026-02-22',
         weeklyLimit: 5,
+        autoRenew: false,
       }],
     });
 
@@ -573,6 +583,7 @@ describe('processPenalties', () => {
       days: { '2026-02-16': { entries: [{ app: 'X', minutes: 600 }] } },
       tzOffsetHours: -5,
     }));
+    mockS3Send.mockResolvedValueOnce({}); // S3 PutObjectCommand (goal history)
 
     // GetCommand for email+payment info
     mockDdbSend.mockResolvedValueOnce({
@@ -605,6 +616,7 @@ describe('processPenalties', () => {
         weekStart: '2026-02-16',
         weekEnd: '2026-02-22',
         weeklyLimit: 1,
+        autoRenew: false,
       }],
     });
 
@@ -612,6 +624,7 @@ describe('processPenalties', () => {
       days: { '2026-02-16': { entries: [{ app: 'X', minutes: 600 }] } },
       tzOffsetHours: 0,
     }));
+    mockS3Send.mockResolvedValueOnce({}); // S3 PutObjectCommand (goal history)
 
     // GetCommand for email+payment info
     mockDdbSend.mockResolvedValueOnce({
@@ -644,6 +657,7 @@ describe('processPenalties', () => {
         weekStart: '2026-02-16',
         weekEnd: '2026-02-22',
         weeklyLimit: 10,
+        autoRenew: false,
       }],
     });
 
@@ -662,6 +676,7 @@ describe('processPenalties', () => {
         weekStart: '2026-02-23',
         weekEnd: '2026-03-01', // future
         weeklyLimit: 10,
+        autoRenew: false,
       }],
     });
 
@@ -682,12 +697,14 @@ describe('processPenalties', () => {
         weekStart: '2026-02-16',
         weekEnd: '2026-02-22',
         weeklyLimit: 100, // high limit, no data → passes
+        autoRenew: false,
       }],
     });
 
     const noSuchKey = new Error('NoSuchKey');
     noSuchKey.name = 'NoSuchKey';
     mockS3Send.mockRejectedValueOnce(noSuchKey);
+    mockS3Send.mockResolvedValueOnce({}); // S3 PutObjectCommand (goal history)
     mockDdbSend.mockResolvedValueOnce({ Item: null }); // email lookup
     mockDdbSend.mockResolvedValueOnce({}); // update to 'passed'
 
@@ -701,8 +718,8 @@ describe('processPenalties', () => {
 
     mockDdbSend.mockResolvedValueOnce({
       Items: [
-        { userId: 'user-m1', identityId: 'id-m1', weekStart: '2026-02-16', weekEnd: '2026-02-22', weeklyLimit: 100 },
-        { userId: 'user-m2', identityId: 'id-m2', weekStart: '2026-02-16', weekEnd: '2026-02-22', weeklyLimit: 1 },
+        { userId: 'user-m1', identityId: 'id-m1', weekStart: '2026-02-16', weekEnd: '2026-02-22', weeklyLimit: 100, autoRenew: false },
+        { userId: 'user-m2', identityId: 'id-m2', weekStart: '2026-02-16', weekEnd: '2026-02-22', weeklyLimit: 1, autoRenew: false },
       ],
     });
 
@@ -711,6 +728,7 @@ describe('processPenalties', () => {
       days: { '2026-02-16': { entries: [{ app: 'X', minutes: 30 }] } },
       tzOffsetHours: 0,
     }));
+    mockS3Send.mockResolvedValueOnce({}); // S3 PutObjectCommand (goal history) for user-m1
     mockDdbSend.mockResolvedValueOnce({ Item: null }); // email lookup
     mockDdbSend.mockResolvedValueOnce({}); // mark passed
 
@@ -719,6 +737,7 @@ describe('processPenalties', () => {
       days: { '2026-02-16': { entries: [{ app: 'Y', minutes: 300 }] } },
       tzOffsetHours: 0,
     }));
+    mockS3Send.mockResolvedValueOnce({}); // S3 PutObjectCommand (goal history) for user-m2
     mockDdbSend.mockResolvedValueOnce({
       Item: { stripe_customer_id: 'cus_m2', stripe_payment_method_id: 'pm_m2', email: 'm2@test.com' },
     });
@@ -741,6 +760,7 @@ describe('processPenalties', () => {
         weekStart: '2026-02-16',
         weekEnd: '2026-02-22',
         weeklyLimit: 5,
+        autoRenew: false,
       }],
     });
 
@@ -754,6 +774,7 @@ describe('processPenalties', () => {
       },
       tzOffsetHours: 0,
     }));
+    mockS3Send.mockResolvedValueOnce({}); // S3 PutObjectCommand (goal history)
 
     mockDdbSend.mockResolvedValueOnce({ Item: null }); // email lookup
     mockDdbSend.mockResolvedValueOnce({}); // update to passed (120min = 2h < 5h)
@@ -772,6 +793,7 @@ describe('processPenalties', () => {
         weekStart: '2026-02-16',
         weekEnd: '2026-02-22',
         weeklyLimit: 1,
+        autoRenew: false,
       }],
     });
 
@@ -782,6 +804,7 @@ describe('processPenalties', () => {
       },
       tzOffsetHours: 0,
     }));
+    mockS3Send.mockResolvedValueOnce({}); // S3 PutObjectCommand (goal history)
 
     // GetCommand for email+payment info
     mockDdbSend.mockResolvedValueOnce({
@@ -792,5 +815,213 @@ describe('processPenalties', () => {
 
     const result = await stripe.processPenalties();
     expect(result.charged).toBe(1); // 2h > 1h limit
+  });
+
+  test('auto-renews goal after PASSED when autoRenew is true', async () => {
+    mockNowForTimezone(0);
+
+    mockDdbSend.mockResolvedValueOnce({
+      Items: [{
+        userId: 'user-ar1',
+        identityId: 'id-ar1',
+        weekStart: '2026-02-16',
+        weekEnd: '2026-02-22',
+        weeklyLimit: 20,
+        dailyLimit: 2,
+        autoRenew: true,
+        charity: 'UNICEF',
+        charityId: 'unicef',
+        amount: 10,
+      }],
+    });
+
+    mockS3Send.mockResolvedValueOnce(s3Body({
+      days: { '2026-02-16': { entries: [{ app: 'Safari', minutes: 60 }] } },
+      tzOffsetHours: 0,
+    }));
+    mockS3Send.mockResolvedValueOnce({}); // S3 PutObjectCommand (goal history)
+
+    mockDdbSend.mockResolvedValueOnce({ Item: { email: 'ar1@test.com' } }); // email lookup
+    mockDdbSend.mockResolvedValueOnce({}); // update to 'passed'
+    mockDdbSend.mockResolvedValueOnce({}); // PutCommand for renewal goal
+
+    const result = await stripe.processPenalties();
+    expect(result.passed).toBe(1);
+
+    // Verify renewal goal was created (4th DDB call: [0]=Scan, [1]=Get email, [2]=Update passed, [3]=Put renewal)
+    const putCall = mockDdbSend.mock.calls[3][0];
+    expect(putCall.Item.userId).toBe('user-ar1');
+    expect(putCall.Item.weekStart).toBe('2026-02-23');
+    expect(putCall.Item.weekEnd).toBe('2026-03-01');
+    expect(putCall.Item.dailyLimit).toBe(2);
+    expect(putCall.Item.weeklyLimit).toBe(14); // 2 * 7
+    expect(putCall.Item.numDays).toBe(7);
+    expect(putCall.Item.status).toBe('active');
+    expect(putCall.Item.autoRenew).toBe(true);
+    expect(putCall.Item.charity).toBe('UNICEF');
+    expect(putCall.Item.renewedFrom).toBe('2026-02-16');
+    expect(mockSendEmail).toHaveBeenCalledTimes(2); // goalPassed + goalRenewed
+  });
+
+  test('does NOT auto-renew when autoRenew is false', async () => {
+    mockNowForTimezone(0);
+
+    mockDdbSend.mockResolvedValueOnce({
+      Items: [{
+        userId: 'user-ar2',
+        identityId: 'id-ar2',
+        weekStart: '2026-02-16',
+        weekEnd: '2026-02-22',
+        weeklyLimit: 20,
+        dailyLimit: 2,
+        autoRenew: false,
+      }],
+    });
+
+    mockS3Send.mockResolvedValueOnce(s3Body({
+      days: { '2026-02-16': { entries: [{ app: 'Safari', minutes: 60 }] } },
+      tzOffsetHours: 0,
+    }));
+    mockS3Send.mockResolvedValueOnce({}); // S3 PutObjectCommand (goal history)
+
+    mockDdbSend.mockResolvedValueOnce({ Item: { email: 'ar2@test.com' } }); // email lookup
+    mockDdbSend.mockResolvedValueOnce({}); // update to 'passed'
+
+    const result = await stripe.processPenalties();
+    expect(result.passed).toBe(1);
+    // Only 3 DDB calls: Scan, Get(email), Update(passed) — no renewal PutCommand
+    expect(mockDdbSend).toHaveBeenCalledTimes(3);
+  });
+
+  test('auto-renews goal after CHARGED when autoRenew is true', async () => {
+    mockNowForTimezone(0);
+
+    mockDdbSend.mockResolvedValueOnce({
+      Items: [{
+        userId: 'user-ar3',
+        identityId: 'id-ar3',
+        weekStart: '2026-02-16',
+        weekEnd: '2026-02-22',
+        weeklyLimit: 1,
+        dailyLimit: 0.5,
+        autoRenew: true,
+        charity: 'WWF',
+        charityId: 'wwf',
+        amount: 10,
+      }],
+    });
+
+    mockS3Send.mockResolvedValueOnce(s3Body({
+      days: { '2026-02-16': { entries: [{ app: 'YouTube', minutes: 300 }] } },
+      tzOffsetHours: 0,
+    }));
+    mockS3Send.mockResolvedValueOnce({}); // S3 PutObjectCommand (goal history)
+
+    mockDdbSend.mockResolvedValueOnce({
+      Item: { stripe_customer_id: 'cus_ar3', stripe_payment_method_id: 'pm_ar3', email: 'ar3@test.com' },
+    });
+    mockStripe.paymentIntents.create.mockResolvedValueOnce({ id: 'pi_ar3' });
+    mockDdbSend.mockResolvedValueOnce({}); // update to 'charged'
+    mockDdbSend.mockResolvedValueOnce({}); // PutCommand for renewal
+
+    const result = await stripe.processPenalties();
+    expect(result.charged).toBe(1);
+
+    const putCall = mockDdbSend.mock.calls[3][0];
+    expect(putCall.Item.weekStart).toBe('2026-02-23');
+    expect(putCall.Item.weekEnd).toBe('2026-03-01');
+    expect(putCall.Item.status).toBe('active');
+    expect(putCall.Item.autoRenew).toBe(true);
+  });
+
+  test('does NOT renew after charge_failed', async () => {
+    mockNowForTimezone(0);
+
+    mockDdbSend.mockResolvedValueOnce({
+      Items: [{
+        userId: 'user-ar4',
+        identityId: 'id-ar4',
+        weekStart: '2026-02-16',
+        weekEnd: '2026-02-22',
+        weeklyLimit: 1,
+        autoRenew: true,
+      }],
+    });
+
+    mockS3Send.mockResolvedValueOnce(s3Body({
+      days: { '2026-02-16': { entries: [{ app: 'X', minutes: 600 }] } },
+      tzOffsetHours: 0,
+    }));
+    mockS3Send.mockResolvedValueOnce({}); // S3 PutObjectCommand (goal history)
+
+    mockDdbSend.mockResolvedValueOnce({
+      Item: { stripe_customer_id: 'cus_ar4', stripe_payment_method_id: 'pm_ar4', email: 'ar4@test.com' },
+    });
+
+    const stripeErr = new Error('Card was declined');
+    stripeErr.code = 'card_declined';
+    mockStripe.paymentIntents.create.mockRejectedValueOnce(stripeErr);
+    mockDdbSend.mockResolvedValueOnce({}); // update to 'charge_failed'
+
+    const result = await stripe.processPenalties();
+    expect(result.errors).toBe(1);
+    // No renewal PutCommand: Scan, Get, Update only
+    expect(mockDdbSend).toHaveBeenCalledTimes(3);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// POST /goals/cancel-renewal
+// ═══════════════════════════════════════════════════════════════════════
+describe('POST /goals/cancel-renewal', () => {
+  test('returns 401 when not authenticated', async () => {
+    const event = makeEvent({ weekStart: '2026-02-23' });
+    const result = await stripe.cancelRenewal(event);
+    expect(result.statusCode).toBe(401);
+  });
+
+  test('returns 400 when weekStart missing', async () => {
+    const event = makeEvent({}, { authorizer: 'user-cr1' });
+    const result = await stripe.cancelRenewal(event);
+    expect(result.statusCode).toBe(400);
+  });
+
+  test('returns 404 when goal not found', async () => {
+    mockDdbSend.mockResolvedValueOnce({ Item: null });
+    const event = makeEvent({ weekStart: '2026-02-23' }, { authorizer: 'user-cr2' });
+    const result = await stripe.cancelRenewal(event);
+    expect(result.statusCode).toBe(404);
+  });
+
+  test('returns 409 when goal is not active', async () => {
+    mockDdbSend.mockResolvedValueOnce({
+      Item: { userId: 'user-cr3', weekStart: '2026-02-23', status: 'passed' },
+    });
+    const event = makeEvent({ weekStart: '2026-02-23' }, { authorizer: 'user-cr3' });
+    const result = await stripe.cancelRenewal(event);
+    expect(result.statusCode).toBe(409);
+  });
+
+  test('sets autoRenew to false on active goal', async () => {
+    mockDdbSend.mockResolvedValueOnce({
+      Item: { userId: 'user-cr4', weekStart: '2026-02-23', status: 'active', autoRenew: true },
+    });
+    mockDdbSend.mockResolvedValueOnce({}); // UpdateCommand
+
+    const event = makeEvent({ weekStart: '2026-02-23' }, { authorizer: 'user-cr4' });
+    const result = await stripe.cancelRenewal(event);
+
+    expect(result.statusCode).toBe(200);
+    expect(JSON.parse(result.body).autoRenew).toBe(false);
+
+    const updateCall = mockDdbSend.mock.calls[1][0];
+    expect(updateCall.ExpressionAttributeValues[':ar']).toBe(false);
+  });
+
+  test('returns 500 on DynamoDB error', async () => {
+    mockDdbSend.mockRejectedValueOnce(new Error('DDB timeout'));
+    const event = makeEvent({ weekStart: '2026-02-23' }, { authorizer: 'user-cr5' });
+    const result = await stripe.cancelRenewal(event);
+    expect(result.statusCode).toBe(500);
   });
 });

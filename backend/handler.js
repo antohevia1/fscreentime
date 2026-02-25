@@ -181,6 +181,7 @@ module.exports.saveGoal = async (event) => {
         userId,
         weekStart: goal.weekStart,
         ...goal,
+        autoRenew: goal.autoRenew !== false,
         createdAt: new Date().toISOString(),
         ttl: Math.floor(Date.now() / 1000) + 365 * 24 * 3600,
       },
@@ -193,11 +194,11 @@ module.exports.saveGoal = async (event) => {
   }
 };
 
-// GET /goals?weekStart=YYYY-MM-DD
+// GET /goals?weekStart=YYYY-MM-DD&status=active
 module.exports.getGoal = async (event) => {
   try {
     const userId = getUserId(event);
-    const { weekStart } = event.queryStringParameters || {};
+    const { weekStart, status } = event.queryStringParameters || {};
 
     const params = {
       TableName: GOALS_TABLE,
@@ -206,9 +207,14 @@ module.exports.getGoal = async (event) => {
         : 'userId = :uid',
       ExpressionAttributeValues: { ':uid': userId },
       ScanIndexForward: false,
-      Limit: 1,
+      Limit: status ? 10 : 1,
     };
     if (weekStart) params.ExpressionAttributeValues[':ws'] = weekStart;
+    if (status) {
+      params.FilterExpression = '#st = :status';
+      params.ExpressionAttributeNames = { '#st': 'status' };
+      params.ExpressionAttributeValues[':status'] = status;
+    }
 
     const result = await ddb.send(new QueryCommand(params));
     return res(200, result.Items?.[0] || null);
