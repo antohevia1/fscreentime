@@ -5,6 +5,7 @@ import Dashboard from '../components/Dashboard';
 import { LogoText } from '../components/Logo';
 import Goals from './Goals';
 import Ranking from './Ranking';
+import FeedbackForm from '../components/FeedbackForm';
 import { fetchScreenTimeData } from '../utils/s3Data';
 
 const navItems = [
@@ -18,6 +19,7 @@ export default function AppShell() {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
 
   useEffect(() => {
     console.log('AppShell useEffect triggered with user:', user);
@@ -62,6 +64,11 @@ export default function AppShell() {
         </nav>
 
         <div className="px-2 pb-4 space-y-1">
+          <button onClick={() => setShowFeedback(true)}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted hover:text-cream hover:bg-surface-card w-full transition">
+            <span className="text-base">&#9993;</span>
+            {!collapsed && <span>Feedback</span>}
+          </button>
           {!collapsed && (
             <p className="px-3 text-xs text-muted truncate">{user?.alias || user?.email}</p>
           )}
@@ -118,6 +125,26 @@ export default function AppShell() {
         </nav>
 
       </div>
+
+      {/* Mobile floating feedback button */}
+      <button
+        onClick={() => setShowFeedback(true)}
+        className="md:hidden fixed bottom-16 right-4 z-30 w-11 h-11 bg-caramel text-surface rounded-full flex items-center justify-center shadow-lg hover:bg-caramel-light transition"
+        aria-label="Send feedback"
+      >
+        <span className="text-lg">&#9993;</span>
+      </button>
+
+      {/* Feedback modal */}
+      {showFeedback && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowFeedback(false)} />
+          <div className="relative bg-surface-light border border-border rounded-xl w-full max-w-md p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-cream mb-4">Send Feedback</h2>
+            <FeedbackForm onClose={() => setShowFeedback(false)} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

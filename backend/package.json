@@ -2,6 +2,8 @@
   "name": "screen-time-backend",
   "version": "2.0.0",
   "scripts": {
+    "test": "jest --verbose",
+    "test:watch": "jest --watch",
     "deploy": "serverless deploy",
     "deploy:prod": "serverless deploy --stage prod",
     "remove": "serverless remove"
@@ -9,10 +11,12 @@
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.500.0",
     "@aws-sdk/client-s3": "^3.500.0",
+    "@aws-sdk/client-ses": "^3.996.0",
     "@aws-sdk/lib-dynamodb": "^3.500.0",
     "stripe": "^14.0.0"
   },
   "devDependencies": {
+    "jest": "^30.2.0",
     "serverless": "^3.38.0",
     "serverless-offline": "^14.4.0"
   },

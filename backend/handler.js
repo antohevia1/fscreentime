@@ -13,9 +13,11 @@ const getUserId = (event) => event.requestContext?.authorizer?.jwt?.claims?.sub;
 
 // Parse comma-separated entries: "Google Chrome (2h 13m),Spotify (6m),iTerm (52s)"
 function parseEntries(str) {
-  return str.split(/,(?=\s*[A-Za-z0-9])/).map(part => {
-    const clean = part.replace(/[\u200E\u200F\u200B-\u200D\uFEFF]/g, '').trim();
-    const match = clean.match(/^(.+?)\s*\((?:(\d+)h)?\s*(?:(\d+)m)?\s*(?:(\d+)s)?\)$/i);
+  // Strip invisible Unicode characters iOS Shortcuts may insert BEFORE splitting
+  const clean = str.replace(/[\u200E\u200F\u200B-\u200D\uFEFF\u2060\u00AD]/g, '');
+  return clean.split(/,(?=\s*[A-Za-z0-9])/).map(part => {
+    const trimmed = part.trim();
+    const match = trimmed.match(/^([^,]+?)\s*\((?:(\d+)h)?\s*(?:(\d+)m)?\s*(?:(\d+)s)?\)$/i);
     if (!match) return null;
     const app = match[1].trim();
     const minutes = parseInt(match[2] || '0', 10) * 60

@@ -2,6 +2,7 @@ const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, PutCommand, GetCommand, UpdateCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const Stripe = require('stripe');
+const { sendEmail, templates } = require('./email');
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -52,13 +53,14 @@ module.exports.createSetupIntent = async (event) => {
       metadata: { userId },
     });
 
-    // Persist Stripe customer ID
+    // Persist Stripe customer ID and email
     await ddb.send(new PutCommand({
       TableName: PAYMENTS_TABLE,
       Item: {
         userId,
         stripe_customer_id: customerId,
         setup_complete: false,
+        email: email || null,
         createdAt: new Date().toISOString(),
       },
     }));
@@ -115,6 +117,16 @@ module.exports.stripeWebhook = async (event) => {
     }));
 
     console.log(`Payment method saved for user ${userId}: ${paymentMethodId}`);
+
+    // Send confirmation email
+    const paymentRecord = await ddb.send(new GetCommand({
+      TableName: PAYMENTS_TABLE,
+      Key: { userId },
+    }));
+    const userEmail = paymentRecord.Item?.email;
+    if (userEmail) {
+      await sendEmail(userEmail, templates.paymentSetupComplete(userEmail));
+    }
   }
 
   return res(200, { received: true });
@@ -158,6 +170,10 @@ module.exports.cancelGoal = async (event) => {
           ':ca': new Date().toISOString(),
         },
       }));
+
+      if (paymentInfo.Item?.email) {
+        await sendEmail(paymentInfo.Item.email, templates.goalCancelled(paymentInfo.Item.email, { weekStart, charged: false, amount: 0 }));
+      }
       return res(200, { cancelled: true, charged: false });
     }
 
@@ -192,6 +208,9 @@ module.exports.cancelGoal = async (event) => {
       },
     }));
 
+    if (paymentInfo.Item?.email) {
+      await sendEmail(paymentInfo.Item.email, templates.goalCancelled(paymentInfo.Item.email, { weekStart, charged: true, amount: 1000 }));
+    }
     return res(200, { cancelled: true, charged: true, paymentIntentId: paymentIntent.id });
   } catch (err) {
     if (err.code === 'authentication_required') {
@@ -285,6 +304,13 @@ module.exports.processPenalties = async () => {
       const failed = screenTimeHours > goalHours;
       console.log(`User ${userId} (${allData.timezone || 'UTC'}): ${screenTimeHours.toFixed(1)}h / ${goalHours}h → ${failed ? 'FAILED' : 'PASSED'}`);
 
+      // Look up email for notifications
+      const userRecord = await ddb.send(new GetCommand({
+        TableName: PAYMENTS_TABLE,
+        Key: { userId },
+      }));
+      const userEmail = userRecord.Item?.email;
+
       if (!failed) {
         await ddb.send(new UpdateCommand({
           TableName: GOALS_TABLE,
@@ -293,15 +319,17 @@ module.exports.processPenalties = async () => {
           ExpressionAttributeNames: { '#st': 'status' },
           ExpressionAttributeValues: { ':v': 'passed' },
         }));
+        if (userEmail) {
+          await sendEmail(userEmail, templates.goalPassed(userEmail, {
+            weekStart, weekEnd, screenTimeHours: screenTimeHours.toFixed(1), goalHours,
+          }));
+        }
         results.passed++;
         continue;
       }
 
       // ── Charge the penalty ──────────────────────────────────
-      const paymentInfo = await ddb.send(new GetCommand({
-        TableName: PAYMENTS_TABLE,
-        Key: { userId },
-      }));
+      const paymentInfo = userRecord; // already fetched above
 
       if (!paymentInfo.Item?.stripe_payment_method_id || !paymentInfo.Item?.stripe_customer_id) {
         console.warn(`No payment method for user ${userId}, marking failed`);
@@ -350,6 +378,12 @@ module.exports.processPenalties = async () => {
             ':sta': screenTimeHours.toFixed(1),
           },
         }));
+        if (userEmail) {
+          await sendEmail(userEmail, templates.penaltyCharged(userEmail, {
+            weekStart, weekEnd, screenTimeHours: screenTimeHours.toFixed(1), goalHours,
+            amount: 1000, charity: goal.charity || '',
+          }));
+        }
         results.charged++;
       } catch (stripeErr) {
         if (stripeErr.code === 'authentication_required') {
@@ -367,6 +401,11 @@ module.exports.processPenalties = async () => {
               ':fr': 'Bank requires additional authentication for this charge',
             },
           }));
+          if (userEmail) {
+            await sendEmail(userEmail, templates.chargeFailed(userEmail, {
+              weekStart, reason: 'Your bank requires additional authentication for this charge.',
+            }));
+          }
           results.errors++;
         } else {
           console.error(`Stripe charge failed for user ${userId}:`, stripeErr.message);
@@ -380,6 +419,11 @@ module.exports.processPenalties = async () => {
               ':fr': stripeErr.message,
             },
           }));
+          if (userEmail) {
+            await sendEmail(userEmail, templates.chargeFailed(userEmail, {
+              weekStart, reason: stripeErr.message,
+            }));
+          }
           results.errors++;
         }
       }

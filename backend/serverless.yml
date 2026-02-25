@@ -21,6 +21,10 @@ provider:
     DATA_BUCKET: ${self:service}-${sls:stage}-data
     STRIPE_SECRET_KEY: ${env:STRIPE_SECRET_KEY, 'REPLACE_ME'}
     STRIPE_WEBHOOK_SECRET: ${env:STRIPE_WEBHOOK_SECRET, 'REPLACE_ME'}
+    SES_REGION: ${env:SES_REGION, 'ap-southeast-2'}
+    SES_FROM_EMAIL: ${env:SES_FROM_EMAIL, 'noreply@fscreentime.app'}
+    SES_SUPPORT_EMAIL: ${env:SES_SUPPORT_EMAIL, 'ifundfocus@gmail.com'}
+    APP_URL: ${env:APP_URL, 'https://www.fscreentime.app'}
     STAGE: ${sls:stage}
   httpApi:
     cors: true
@@ -61,6 +65,11 @@ provider:
             - s3:ListBucket
           Resource:
             - !Sub 'arn:aws:s3:::${self:provider.environment.DATA_BUCKET}'
+        - Effect: Allow
+          Action:
+            - ses:SendEmail
+            - ses:SendRawEmail
+          Resource: '*'
 
 functions:
   # Public endpoint — phone devices post screen time here
@@ -126,6 +135,14 @@ functions:
     events:
       - httpApi:
           path: /stripe-webhook
+          method: post
+
+  # ── Contact / Feedback ────────────────────────────────────
+  submitFeedback:
+    handler: contact.submitFeedback
+    events:
+      - httpApi:
+          path: /contact
           method: post
 
   # Penalty processor — runs hourly on Sun+Mon to cover all timezones.
