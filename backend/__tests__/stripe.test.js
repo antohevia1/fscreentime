@@ -126,6 +126,27 @@ describe('POST /create-setup-intent', () => {
     expect(JSON.parse(result.body).customer_id).toBe('cus_existing');
   });
 
+  test('strips invalid email (e.g. Google federated username) before passing to Stripe', async () => {
+    mockDdbSend.mockResolvedValueOnce({ Item: null }); // no existing record
+    mockStripe.customers.create.mockResolvedValueOnce({ id: 'cus_google' });
+    mockStripe.setupIntents.create.mockResolvedValueOnce({
+      client_secret: 'seti_secret_google',
+    });
+    mockDdbSend.mockResolvedValueOnce({}); // PutCommand
+
+    const event = makeEvent({ email: 'Google_112356695958486946862' }, { authorizer: 'user-google' });
+    const result = await stripe.createSetupIntent(event);
+
+    expect(result.statusCode).toBe(200);
+    // Should NOT pass the invalid email to Stripe
+    expect(mockStripe.customers.create).toHaveBeenCalledWith({
+      metadata: { userId: 'user-google' },
+    });
+    // Email stored in DDB should be null
+    const putCall = mockDdbSend.mock.calls[1][0];
+    expect(putCall.Item.email).toBeNull();
+  });
+
   test('returns 500 on Stripe API failure', async () => {
     mockDdbSend.mockResolvedValueOnce({ Item: null });
     mockStripe.customers.create.mockRejectedValueOnce(new Error('Stripe is down'));

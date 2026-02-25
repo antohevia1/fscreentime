@@ -15,6 +15,7 @@ const DATA_BUCKET = process.env.DATA_BUCKET;
 const headers = { 'Content-Type': 'application/json' };
 const res = (code, body) => ({ statusCode: code, headers, body: JSON.stringify(body) });
 const getUserId = (event) => event.requestContext?.authorizer?.jwt?.claims?.sub;
+const isValidEmail = (str) => typeof str === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str);
 
 /* ─── POST /create-setup-intent ──────────────────────────────────── */
 module.exports.createSetupIntent = async (event) => {
@@ -23,7 +24,7 @@ module.exports.createSetupIntent = async (event) => {
     if (!userId) return res(401, { error: 'Unauthorized' });
 
     const body = JSON.parse(event.body || '{}');
-    const email = body.email;
+    const email = isValidEmail(body.email) ? body.email : null;
 
     // Check if user already has a completed payment method
     const existing = await ddb.send(new GetCommand({

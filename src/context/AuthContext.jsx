@@ -13,10 +13,15 @@ export function AuthProvider({ children }) {
     try {
       const currentUser = await getCurrentUser();
       const session = await fetchAuthSession();
+      const idTokenPayload = session.tokens?.idToken?.payload;
+      const email =
+        currentUser.signInDetails?.loginId ||
+        idTokenPayload?.email ||
+        currentUser.username;
       setUser({
         userId: currentUser.userId,
         identityId: session.identityId,
-        email: currentUser.signInDetails?.loginId || currentUser.username,
+        email,
         alias: currentUser.username,
         token: session.tokens?.idToken?.toString(),
         credentials: session.credentials,
