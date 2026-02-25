@@ -34,10 +34,11 @@ describe('escapeHtml', () => {
 });
 
 describe('email templates', () => {
-  test('paymentSetupComplete generates valid email', () => {
+  test('paymentSetupComplete generates valid email with logo', () => {
     const email = templates.paymentSetupComplete('user@test.com');
     expect(email.subject).toContain('Payment method saved');
-    expect(email.html).toContain('fscreentime');
+    expect(email.html).toContain('fScreentime');
+    expect(email.html).toContain('icon-1024.png');
     expect(email.html).toContain('securely saved');
     expect(email.text).toContain('securely saved');
   });

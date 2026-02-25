@@ -5,6 +5,8 @@ const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@fscreentime.app';
 const SUPPORT_EMAIL = process.env.SES_SUPPORT_EMAIL || 'ifundfocus@gmail.com';
 const APP_URL = process.env.APP_URL || 'https://www.fscreentime.app';
 
+const LOGO_URL = `${APP_URL}/icon-1024.png`;
+
 // ── Base HTML template ────────────────────────────────────────────────
 function baseTemplate(title, content) {
   return `<!DOCTYPE html>
@@ -14,18 +16,21 @@ function baseTemplate(title, content) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
 </head>
-<body style="margin:0;padding:0;background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0f172a;">
+<body style="margin:0;padding:0;background:#1a1714;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#1a1714;">
     <tr>
       <td align="center" style="padding:40px 20px;">
-        <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="background:#1e293b;border-radius:12px;overflow:hidden;">
-          <!-- Header -->
+        <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="background:#242019;border-radius:12px;overflow:hidden;">
+          <!-- Header with logo -->
           <tr>
-            <td style="padding:32px 40px 20px;text-align:center;border-bottom:1px solid #334155;">
-              <div style="font-size:28px;font-weight:700;color:#f8fafc;letter-spacing:-0.5px;">
-                <span style="color:#3b82f6;">f</span>screentime
+            <td style="padding:32px 40px 20px;text-align:center;border-bottom:1px solid #3e3830;">
+              <a href="${APP_URL}" style="text-decoration:none;">
+                <img src="${LOGO_URL}" alt="fscreentime" width="48" height="48" style="display:block;margin:0 auto 12px;border-radius:10px;" />
+              </a>
+              <div style="font-size:22px;font-weight:600;letter-spacing:-0.3px;">
+                <span style="color:#c4956a;">fScreentime</span><span style="color:#9a8e80;">.app</span>
               </div>
-              <div style="font-size:12px;color:#64748b;margin-top:4px;text-transform:uppercase;letter-spacing:1px;">Skin in the Game</div>
+              <div style="font-size:11px;color:#9a8e80;margin-top:4px;text-transform:uppercase;letter-spacing:1.5px;">Skin in the Game</div>
             </td>
           </tr>
           <!-- Content -->
@@ -36,15 +41,15 @@ function baseTemplate(title, content) {
           </tr>
           <!-- Footer -->
           <tr>
-            <td style="padding:24px 40px;border-top:1px solid #334155;text-align:center;">
-              <p style="margin:0;font-size:13px;color:#64748b;line-height:1.5;">
-                <a href="${APP_URL}" style="color:#3b82f6;text-decoration:none;">fscreentime.app</a>
+            <td style="padding:24px 40px;border-top:1px solid #3e3830;text-align:center;">
+              <p style="margin:0;font-size:13px;color:#9a8e80;line-height:1.5;">
+                <a href="${APP_URL}" style="color:#c4956a;text-decoration:none;">fscreentime.app</a>
                 &nbsp;&middot;&nbsp;
-                <a href="${APP_URL}/privacy" style="color:#64748b;text-decoration:none;">Privacy</a>
+                <a href="${APP_URL}/privacy" style="color:#9a8e80;text-decoration:none;">Privacy</a>
                 &nbsp;&middot;&nbsp;
-                <a href="${APP_URL}/terms" style="color:#64748b;text-decoration:none;">Terms</a>
+                <a href="${APP_URL}/terms" style="color:#9a8e80;text-decoration:none;">Terms</a>
               </p>
-              <p style="margin:8px 0 0;font-size:11px;color:#475569;">
+              <p style="margin:8px 0 0;font-size:11px;color:#9a8e80;">
                 You received this because you have an active goal on fscreentime.
               </p>
             </td>
@@ -61,16 +66,16 @@ function baseTemplate(title, content) {
 
 function paymentSetupComplete(email) {
   const content = `
-    <h2 style="margin:0 0 16px;font-size:22px;color:#f8fafc;font-weight:600;">Payment Method Saved</h2>
-    <p style="margin:0 0 16px;font-size:15px;color:#cbd5e1;line-height:1.6;">
+    <h2 style="margin:0 0 16px;font-size:22px;color:#f5efe6;font-weight:600;">Payment Method Saved</h2>
+    <p style="margin:0 0 16px;font-size:15px;color:#d4aa80;line-height:1.6;">
       Your card has been securely saved. No charges will be made unless you fail to meet your weekly screen time goal.
     </p>
-    <div style="background:#0f172a;border-radius:8px;padding:16px 20px;margin:16px 0;">
-      <p style="margin:0;font-size:14px;color:#94a3b8;">
-        <strong style="color:#f8fafc;">How it works:</strong> If you exceed your weekly limit, a $10 penalty will be automatically charged. Meet your goal and you pay nothing.
+    <div style="background:#2e2a24;border-radius:8px;padding:16px 20px;margin:16px 0;">
+      <p style="margin:0;font-size:14px;color:#9a8e80;">
+        <strong style="color:#f5efe6;">How it works:</strong> If you exceed your weekly limit, a $10 penalty will be automatically charged. Meet your goal and you pay nothing.
       </p>
     </div>
-    <p style="margin:16px 0 0;font-size:15px;color:#cbd5e1;line-height:1.6;">
+    <p style="margin:16px 0 0;font-size:15px;color:#d4aa80;line-height:1.6;">
       Stay focused and keep your screen time in check!
     </p>`;
   return {
@@ -83,26 +88,26 @@ function paymentSetupComplete(email) {
 function goalPassed(email, { weekStart, weekEnd, screenTimeHours, goalHours }) {
   const content = `
     <h2 style="margin:0 0 16px;font-size:22px;color:#22c55e;font-weight:600;">&#10003; Goal Achieved!</h2>
-    <p style="margin:0 0 16px;font-size:15px;color:#cbd5e1;line-height:1.6;">
-      Congratulations! You stayed within your screen time limit for the week of <strong style="color:#f8fafc;">${weekStart}</strong> to <strong style="color:#f8fafc;">${weekEnd}</strong>.
+    <p style="margin:0 0 16px;font-size:15px;color:#d4aa80;line-height:1.6;">
+      Congratulations! You stayed within your screen time limit for the week of <strong style="color:#f5efe6;">${weekStart}</strong> to <strong style="color:#f5efe6;">${weekEnd}</strong>.
     </p>
-    <div style="background:#0f172a;border-radius:8px;padding:16px 20px;margin:16px 0;">
+    <div style="background:#2e2a24;border-radius:8px;padding:16px 20px;margin:16px 0;">
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
         <tr>
-          <td style="padding:4px 0;font-size:14px;color:#94a3b8;">Your screen time</td>
+          <td style="padding:4px 0;font-size:14px;color:#9a8e80;">Your screen time</td>
           <td align="right" style="padding:4px 0;font-size:14px;color:#22c55e;font-weight:600;">${screenTimeHours}h</td>
         </tr>
         <tr>
-          <td style="padding:4px 0;font-size:14px;color:#94a3b8;">Weekly limit</td>
-          <td align="right" style="padding:4px 0;font-size:14px;color:#f8fafc;font-weight:600;">${goalHours}h</td>
+          <td style="padding:4px 0;font-size:14px;color:#9a8e80;">Weekly limit</td>
+          <td align="right" style="padding:4px 0;font-size:14px;color:#f5efe6;font-weight:600;">${goalHours}h</td>
         </tr>
         <tr>
-          <td style="padding:4px 0;font-size:14px;color:#94a3b8;">Amount charged</td>
+          <td style="padding:4px 0;font-size:14px;color:#9a8e80;">Amount charged</td>
           <td align="right" style="padding:4px 0;font-size:14px;color:#22c55e;font-weight:600;">$0.00</td>
         </tr>
       </table>
     </div>
-    <p style="margin:16px 0 0;font-size:15px;color:#cbd5e1;line-height:1.6;">
+    <p style="margin:16px 0 0;font-size:15px;color:#d4aa80;line-height:1.6;">
       No penalty was charged. Keep up the great work!
     </p>`;
   return {
@@ -114,32 +119,32 @@ function goalPassed(email, { weekStart, weekEnd, screenTimeHours, goalHours }) {
 
 function penaltyCharged(email, { weekStart, weekEnd, screenTimeHours, goalHours, amount, charity }) {
   const charityNote = charity
-    ? `<p style="margin:12px 0 0;font-size:14px;color:#94a3b8;">Your penalty will be donated to <strong style="color:#f8fafc;">${charity}</strong>.</p>`
+    ? `<p style="margin:12px 0 0;font-size:14px;color:#9a8e80;">Your penalty will be donated to <strong style="color:#f5efe6;">${charity}</strong>.</p>`
     : '';
   const charityText = charity ? `\nYour penalty will be donated to ${charity}.` : '';
   const content = `
     <h2 style="margin:0 0 16px;font-size:22px;color:#ef4444;font-weight:600;">Penalty Charged</h2>
-    <p style="margin:0 0 16px;font-size:15px;color:#cbd5e1;line-height:1.6;">
-      You exceeded your screen time goal for the week of <strong style="color:#f8fafc;">${weekStart}</strong> to <strong style="color:#f8fafc;">${weekEnd}</strong>.
+    <p style="margin:0 0 16px;font-size:15px;color:#d4aa80;line-height:1.6;">
+      You exceeded your screen time goal for the week of <strong style="color:#f5efe6;">${weekStart}</strong> to <strong style="color:#f5efe6;">${weekEnd}</strong>.
     </p>
-    <div style="background:#0f172a;border-radius:8px;padding:16px 20px;margin:16px 0;">
+    <div style="background:#2e2a24;border-radius:8px;padding:16px 20px;margin:16px 0;">
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
         <tr>
-          <td style="padding:4px 0;font-size:14px;color:#94a3b8;">Your screen time</td>
+          <td style="padding:4px 0;font-size:14px;color:#9a8e80;">Your screen time</td>
           <td align="right" style="padding:4px 0;font-size:14px;color:#ef4444;font-weight:600;">${screenTimeHours}h</td>
         </tr>
         <tr>
-          <td style="padding:4px 0;font-size:14px;color:#94a3b8;">Weekly limit</td>
-          <td align="right" style="padding:4px 0;font-size:14px;color:#f8fafc;font-weight:600;">${goalHours}h</td>
+          <td style="padding:4px 0;font-size:14px;color:#9a8e80;">Weekly limit</td>
+          <td align="right" style="padding:4px 0;font-size:14px;color:#f5efe6;font-weight:600;">${goalHours}h</td>
         </tr>
         <tr>
-          <td style="padding:4px 0;font-size:14px;color:#94a3b8;">Amount charged</td>
+          <td style="padding:4px 0;font-size:14px;color:#9a8e80;">Amount charged</td>
           <td align="right" style="padding:4px 0;font-size:14px;color:#ef4444;font-weight:600;">$${(amount / 100).toFixed(2)}</td>
         </tr>
       </table>
       ${charityNote}
     </div>
-    <p style="margin:16px 0 0;font-size:15px;color:#cbd5e1;line-height:1.6;">
+    <p style="margin:16px 0 0;font-size:15px;color:#d4aa80;line-height:1.6;">
       Use this as motivation to reduce your screen time next week.
     </p>`;
   return {
@@ -151,19 +156,19 @@ function penaltyCharged(email, { weekStart, weekEnd, screenTimeHours, goalHours,
 
 function chargeFailed(email, { weekStart, reason }) {
   const content = `
-    <h2 style="margin:0 0 16px;font-size:22px;color:#f59e0b;font-weight:600;">Payment Failed</h2>
-    <p style="margin:0 0 16px;font-size:15px;color:#cbd5e1;line-height:1.6;">
-      We were unable to process your penalty charge for the week of <strong style="color:#f8fafc;">${weekStart}</strong>.
+    <h2 style="margin:0 0 16px;font-size:22px;color:#e8a04c;font-weight:600;">Payment Failed</h2>
+    <p style="margin:0 0 16px;font-size:15px;color:#d4aa80;line-height:1.6;">
+      We were unable to process your penalty charge for the week of <strong style="color:#f5efe6;">${weekStart}</strong>.
     </p>
-    <div style="background:#0f172a;border-radius:8px;padding:16px 20px;margin:16px 0;">
-      <p style="margin:0;font-size:14px;color:#f59e0b;">
+    <div style="background:#2e2a24;border-radius:8px;padding:16px 20px;margin:16px 0;">
+      <p style="margin:0;font-size:14px;color:#e8a04c;">
         <strong>Reason:</strong> ${reason}
       </p>
     </div>
-    <p style="margin:16px 0 0;font-size:15px;color:#cbd5e1;line-height:1.6;">
+    <p style="margin:16px 0 0;font-size:15px;color:#d4aa80;line-height:1.6;">
       Please update your payment method to avoid issues with future goals.
     </p>
-    <a href="${APP_URL}/app" style="display:inline-block;margin-top:16px;padding:12px 24px;background:#3b82f6;color:#fff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">
+    <a href="${APP_URL}/app" style="display:inline-block;margin-top:16px;padding:12px 24px;background:#c4956a;color:#1a1714;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">
       Update Payment Method
     </a>`;
   return {
@@ -181,14 +186,14 @@ function goalCancelled(email, { weekStart, charged, amount }) {
     ? `A forfeit penalty of $${(amount / 100).toFixed(2)} has been charged to your card.`
     : `No charge was made.`;
   const content = `
-    <h2 style="margin:0 0 16px;font-size:22px;color:#f8fafc;font-weight:600;">Goal Cancelled</h2>
-    <p style="margin:0 0 16px;font-size:15px;color:#cbd5e1;line-height:1.6;">
-      Your goal for the week of <strong style="color:#f8fafc;">${weekStart}</strong> has been cancelled.
+    <h2 style="margin:0 0 16px;font-size:22px;color:#f5efe6;font-weight:600;">Goal Cancelled</h2>
+    <p style="margin:0 0 16px;font-size:15px;color:#d4aa80;line-height:1.6;">
+      Your goal for the week of <strong style="color:#f5efe6;">${weekStart}</strong> has been cancelled.
     </p>
-    <div style="background:#0f172a;border-radius:8px;padding:16px 20px;margin:16px 0;">
-      <p style="margin:0;font-size:14px;color:#cbd5e1;">${chargeText}</p>
+    <div style="background:#2e2a24;border-radius:8px;padding:16px 20px;margin:16px 0;">
+      <p style="margin:0;font-size:14px;color:#d4aa80;">${chargeText}</p>
     </div>
-    <p style="margin:16px 0 0;font-size:15px;color:#cbd5e1;line-height:1.6;">
+    <p style="margin:16px 0 0;font-size:15px;color:#d4aa80;line-height:1.6;">
       You can set a new goal anytime from the app.
     </p>`;
   return {
@@ -201,26 +206,26 @@ function goalCancelled(email, { weekStart, charged, amount }) {
 function contactFormSubmission({ name, email, rating, message }) {
   const stars = rating ? '★'.repeat(rating) + '☆'.repeat(5 - rating) : 'Not rated';
   const content = `
-    <h2 style="margin:0 0 16px;font-size:22px;color:#f8fafc;font-weight:600;">New Feedback Received</h2>
-    <div style="background:#0f172a;border-radius:8px;padding:16px 20px;margin:16px 0;">
+    <h2 style="margin:0 0 16px;font-size:22px;color:#f5efe6;font-weight:600;">New Feedback Received</h2>
+    <div style="background:#2e2a24;border-radius:8px;padding:16px 20px;margin:16px 0;">
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
         <tr>
-          <td style="padding:4px 0;font-size:14px;color:#94a3b8;">From</td>
-          <td align="right" style="padding:4px 0;font-size:14px;color:#f8fafc;">${name || 'Anonymous'}</td>
+          <td style="padding:4px 0;font-size:14px;color:#9a8e80;">From</td>
+          <td align="right" style="padding:4px 0;font-size:14px;color:#f5efe6;">${name || 'Anonymous'}</td>
         </tr>
         <tr>
-          <td style="padding:4px 0;font-size:14px;color:#94a3b8;">Email</td>
-          <td align="right" style="padding:4px 0;font-size:14px;color:#f8fafc;">${email || 'Not provided'}</td>
+          <td style="padding:4px 0;font-size:14px;color:#9a8e80;">Email</td>
+          <td align="right" style="padding:4px 0;font-size:14px;color:#f5efe6;">${email || 'Not provided'}</td>
         </tr>
         <tr>
-          <td style="padding:4px 0;font-size:14px;color:#94a3b8;">Rating</td>
-          <td align="right" style="padding:4px 0;font-size:14px;color:#f59e0b;">${stars}</td>
+          <td style="padding:4px 0;font-size:14px;color:#9a8e80;">Rating</td>
+          <td align="right" style="padding:4px 0;font-size:14px;color:#e8a04c;">${stars}</td>
         </tr>
       </table>
     </div>
-    <div style="background:#0f172a;border-radius:8px;padding:16px 20px;margin:16px 0;">
-      <p style="margin:0 0 8px;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:1px;">Message</p>
-      <p style="margin:0;font-size:15px;color:#cbd5e1;line-height:1.6;white-space:pre-wrap;">${escapeHtml(message)}</p>
+    <div style="background:#2e2a24;border-radius:8px;padding:16px 20px;margin:16px 0;">
+      <p style="margin:0 0 8px;font-size:12px;color:#9a8e80;text-transform:uppercase;letter-spacing:1px;">Message</p>
+      <p style="margin:0;font-size:15px;color:#d4aa80;line-height:1.6;white-space:pre-wrap;">${escapeHtml(message)}</p>
     </div>`;
   return {
     subject: `[fscreentime] Feedback from ${name || 'Anonymous'} — ${stars}`,
