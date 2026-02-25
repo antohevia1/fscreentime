@@ -22,7 +22,7 @@ export function AuthProvider({ children }) {
         userId: currentUser.userId,
         identityId: session.identityId,
         email,
-        alias: currentUser.username,
+        alias: idTokenPayload?.preferred_username || currentUser.username,
         token: session.tokens?.idToken?.toString(),
         credentials: session.credentials,
       });

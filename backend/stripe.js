@@ -1,6 +1,6 @@
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, PutCommand, GetCommand, UpdateCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
-const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 const Stripe = require('stripe');
 const { sendEmail, templates } = require('./email');
 
@@ -304,6 +304,21 @@ module.exports.processPenalties = async () => {
       const goalHours = goal.weeklyLimit || (goal.dailyLimit * (goal.numDays || 7));
       const failed = screenTimeHours > goalHours;
       console.log(`User ${userId} (${allData.timezone || 'UTC'}): ${screenTimeHours.toFixed(1)}h / ${goalHours}h → ${failed ? 'FAILED' : 'PASSED'}`);
+
+      // Append to goal history in all.json
+      if (!allData.goalHistory) allData.goalHistory = [];
+      allData.goalHistory.push({
+        weekStart,
+        weekEnd,
+        goalHours,
+        screenTimeHours: parseFloat(screenTimeHours.toFixed(1)),
+      });
+      await s3.send(new PutObjectCommand({
+        Bucket: DATA_BUCKET,
+        Key: `${identityId}/all.json`,
+        Body: JSON.stringify(allData),
+        ContentType: 'application/json',
+      }));
 
       // Look up email for notifications
       const userRecord = await ddb.send(new GetCommand({
