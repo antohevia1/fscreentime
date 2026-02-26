@@ -100,7 +100,7 @@ export default function Landing() {
               to="/auth"
               className="group relative px-8 py-4 rounded-full bg-caramel text-surface font-semibold text-base hover:bg-caramel-light transition-all shadow-lg shadow-caramel/20 animate-glow"
             >
-              Start Your Free Challenge
+              Start Owning Your Time
             </Link>
             <a
               href="#how"
@@ -621,7 +621,7 @@ export default function Landing() {
                 to="/auth"
                 className="inline-block px-10 py-4 rounded-full bg-caramel text-surface font-bold text-lg hover:bg-caramel-light transition-all shadow-lg shadow-caramel/25 animate-glow"
               >
-                Begin Your Challenge
+                Start Owning Your Time
               </Link>
               <p className="mt-6 text-xs text-muted">
                 Free forever · No credit card required
