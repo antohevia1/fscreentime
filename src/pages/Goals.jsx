@@ -4,6 +4,7 @@ import axios from 'axios';
 import { parseScreenTimeData } from '../utils/parseData';
 import { useAuth } from '../context/AuthContext';
 import StripePayment from '../components/StripePayment';
+import { trackEvent } from '../utils/analytics';
 
 const CHARITIES = [
   { id: 'redcross', name: 'Red Cross', emoji: '🏥', desc: 'Disaster relief and humanitarian aid worldwide' },
@@ -120,6 +121,7 @@ export default function Goals({ data }) {
     localStorage.setItem('st_goal', JSON.stringify(g));
     setGoal(g);
     setPaymentStep(null);
+    trackEvent('goal_activated', { daily_limit: g.dailyLimit, charity: g.charity });
   };
 
   // "Accept Challenge" → create setup intent → show card form (or skip if card on file)
@@ -142,6 +144,7 @@ export default function Goals({ data }) {
     pendingGoalRef.current = g;
     setPaymentStep('loading');
     setPaymentError(null);
+    trackEvent('begin_challenge', { daily_limit: dailyLimit, charity: charity.name });
 
     try {
       const resp = await axios.post(`${API_URL}/create-setup-intent`, {
@@ -155,6 +158,7 @@ export default function Goals({ data }) {
       } else {
         setClientSecret(resp.data.client_secret);
         setPaymentStep('card_entry');
+        trackEvent('payment_started');
       }
     } catch (err) {
       console.error('Setup intent error:', err);
@@ -233,11 +237,7 @@ export default function Goals({ data }) {
 
           <div className="bg-surface-light rounded-lg p-4 border border-border mb-6 space-y-2">
             <p className="text-sm text-muted">If you exceed <span className="text-cream">{weeklyBudget}h</span> this period:</p>
-            <p className="text-caramel font-semibold">$10.00 → {charity?.name}</p>
-            <div className="flex gap-4 text-xs text-muted pt-1 border-t border-border/50">
-              <span>Donation: <span className="text-cream">$9.00</span></span>
-              <span>Service fee (10%): <span className="text-cream">$1.00</span></span>
-            </div>
+            <p className="text-caramel font-semibold">Stake money: $10.00 → {charity?.name}</p>
           </div>
 
           <StripePayment
@@ -347,11 +347,7 @@ export default function Goals({ data }) {
 
             <div className="bg-surface-light rounded-lg p-4 border border-border space-y-2">
               <p className="text-sm text-muted">If you exceed <span className="text-cream">{weeklyBudget}h</span> this period:</p>
-              <p className="text-caramel font-semibold">$10.00 → {CHARITIES.find(c => c.id === selectedCharity)?.name}</p>
-              <div className="flex gap-4 text-xs text-muted pt-1 border-t border-border/50">
-                <span>Donation: <span className="text-cream">$9.00</span></span>
-                <span>Service fee (10%): <span className="text-cream">$1.00</span></span>
-              </div>
+              <p className="text-caramel font-semibold">Stake money: $10.00 → {CHARITIES.find(c => c.id === selectedCharity)?.name}</p>
             </div>
             <p className="text-xs text-muted text-center">
               This goal auto-renews weekly. You can cancel renewal anytime from the goal dashboard.
@@ -488,7 +484,7 @@ function GoalProgress({ goal, data, onClear, showResetConfirm, setShowResetConfi
           <p className="text-sm text-muted mt-1">
             {fmtDate(goal.weekStart)} → {fmtDate(goal.weekEnd)} · {goal.numDays || 7} days · {goal.dailyLimit}h/day · {goal.weeklyLimit}h total · ${stakeAmount} → {goal.charity}
           </p>
-          <p className="text-xs text-muted mt-0.5">Donation: ${(stakeAmount * 0.9).toFixed(2)} · Service fee (10%): ${(stakeAmount * 0.1).toFixed(2)}</p>
+          <p className="text-xs text-muted mt-0.5">Stake money: ${stakeAmount}</p>
           {!renewalCancelled && (
             <p className="text-xs text-caramel mt-1">Auto-renews weekly</p>
           )}

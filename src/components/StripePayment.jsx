@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { trackEvent } from '../utils/analytics';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
@@ -40,6 +41,7 @@ function CheckoutForm({ clientSecret, onSuccess, onError }) {
       onError?.(confirmError);
     } else if (setupIntent.status === 'succeeded') {
       setLoading(false);
+      trackEvent('payment_complete');
       onSuccess(setupIntent);
     }
   };
