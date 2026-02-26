@@ -229,6 +229,7 @@ resources:
     # ── Cognito User Pool ────────────────────────────────────
     CognitoUserPool:
       Type: AWS::Cognito::UserPool
+      DeletionPolicy: Retain
       Properties:
         UserPoolName: ${self:service}-${sls:stage}-users
         AutoVerifiedAttributes:
@@ -323,6 +324,7 @@ resources:
     # ── Cognito Identity Pool (for direct S3 access) ────────
     CognitoIdentityPool:
       Type: AWS::Cognito::IdentityPool
+      DeletionPolicy: Retain
       Properties:
         IdentityPoolName: ${self:service}-${sls:stage}-identity
         AllowUnauthenticatedIdentities: false
@@ -493,6 +495,9 @@ resources:
             XSSProtection:
               ModeBlock: true
               Protection: true
+              Override: true
+            ContentSecurityPolicy:
+              ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://js.stripe.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://www.googletagmanager.com; font-src 'self' data:; connect-src 'self' https://*.execute-api.us-east-1.amazonaws.com https://*.amazonaws.com https://*.amazoncognito.com https://cognito-idp.us-east-1.amazonaws.com https://cognito-identity.us-east-1.amazonaws.com https://www.google-analytics.com https://api.stripe.com; frame-src https://js.stripe.com https://*.amazoncognito.com; object-src 'none'; base-uri 'self'; form-action 'self' https://*.amazoncognito.com"
               Override: true
 
     CloudFrontDistribution:

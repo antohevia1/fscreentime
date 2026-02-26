@@ -62,6 +62,7 @@ export default function Auth() {
         </Link>
 
         <div className="bg-surface-card border border-border rounded-xl p-8">
+          <h1 className="sr-only">fScreentime — Sign In or Create Account</h1>
           <h2 className="text-xl font-semibold text-cream mb-6">
             {mode === 'confirm' ? 'Verify your email' : mode === 'signup' ? 'Create account' : 'Welcome back'}
           </h2>

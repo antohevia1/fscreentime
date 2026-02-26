@@ -13,6 +13,7 @@ export function AuthProvider({ children }) {
     try {
       const currentUser = await getCurrentUser();
       const session = await fetchAuthSession();
+      console.log('[Auth] userId:', currentUser.userId, 'identityId:', session.identityId, 'loginId:', currentUser.signInDetails?.loginId);
       const idTokenPayload = session.tokens?.idToken?.payload;
       const email =
         currentUser.signInDetails?.loginId ||

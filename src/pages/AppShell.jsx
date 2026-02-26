@@ -13,7 +13,7 @@ const navItems = [
   { to: '/app/dashboard', label: 'Dashboard', icon: '◫' },
   { to: '/app/goals', label: 'Goals', icon: '◎' },
   { to: '/app/ranking', label: 'Ranking', icon: '▦', desktopOnly: true },
-  { to: '/app/settings', label: 'Settings', icon: '⚙' },
+  { to: '/app/settings', label: 'Settings', icon: '⊞' },
 ];
 
 export default function AppShell() {

@@ -15,6 +15,7 @@ jest.mock('@aws-sdk/lib-dynamodb', () => ({
   GetCommand: jest.fn((p) => ({ _type: 'GetCommand', ...p })),
   UpdateCommand: jest.fn((p) => ({ _type: 'UpdateCommand', ...p })),
   ScanCommand: jest.fn((p) => ({ _type: 'ScanCommand', ...p })),
+  DeleteCommand: jest.fn((p) => ({ _type: 'DeleteCommand', ...p })),
 }));
 jest.mock('@aws-sdk/client-s3', () => ({
   S3Client: jest.fn(() => ({ send: mockS3Send })),
@@ -434,6 +435,8 @@ describe('processPenalties', () => {
       timezone: 'GMT+11',
     }));
 
+    mockDdbSend.mockResolvedValueOnce({ Items: [] }); // retry scan
+
     const result = await stripe.processPenalties();
     expect(result.skipped).toBe(1);
     expect(result.processed).toBe(0);
@@ -469,6 +472,8 @@ describe('processPenalties', () => {
       Item: { userId: 'user-p2', email: 'p2@test.com' },
     });
     mockDdbSend.mockResolvedValueOnce({}); // update to 'passed'
+    mockDdbSend.mockResolvedValueOnce({}); // DeleteCommand
+    mockDdbSend.mockResolvedValueOnce({ Items: [] }); // retry scan
 
     const result = await stripe.processPenalties();
     expect(result.passed).toBe(1);
@@ -513,6 +518,8 @@ describe('processPenalties', () => {
 
     mockStripe.paymentIntents.create.mockResolvedValueOnce({ id: 'pi_penalty_p3' });
     mockDdbSend.mockResolvedValueOnce({}); // update to 'charged'
+    mockDdbSend.mockResolvedValueOnce({}); // DeleteCommand
+    mockDdbSend.mockResolvedValueOnce({ Items: [] }); // retry scan
 
     const result = await stripe.processPenalties();
     expect(result.charged).toBe(1);
@@ -557,6 +564,8 @@ describe('processPenalties', () => {
     // GetCommand for email+payment — no payment method
     mockDdbSend.mockResolvedValueOnce({ Item: { email: 'p4@test.com' } });
     mockDdbSend.mockResolvedValueOnce({}); // update
+    mockDdbSend.mockResolvedValueOnce({}); // DeleteCommand
+    mockDdbSend.mockResolvedValueOnce({ Items: [] }); // retry scan
 
     const result = await stripe.processPenalties();
     expect(result.errors).toBe(1);
@@ -595,6 +604,7 @@ describe('processPenalties', () => {
     stripeErr.raw = { payment_intent: { id: 'pi_auth_needed' } };
     mockStripe.paymentIntents.create.mockRejectedValueOnce(stripeErr);
     mockDdbSend.mockResolvedValueOnce({}); // update
+    mockDdbSend.mockResolvedValueOnce({ Items: [] }); // retry scan
 
     const result = await stripe.processPenalties();
     expect(result.errors).toBe(1);
@@ -636,6 +646,7 @@ describe('processPenalties', () => {
     stripeErr.message = 'Card was declined';
     mockStripe.paymentIntents.create.mockRejectedValueOnce(stripeErr);
     mockDdbSend.mockResolvedValueOnce({}); // update
+    mockDdbSend.mockResolvedValueOnce({ Items: [] }); // retry scan
 
     const result = await stripe.processPenalties();
     expect(result.errors).toBe(1);
@@ -661,6 +672,8 @@ describe('processPenalties', () => {
       }],
     });
 
+    mockDdbSend.mockResolvedValueOnce({ Items: [] }); // retry scan
+
     const result = await stripe.processPenalties();
     expect(result.errors).toBe(1);
     expect(result.processed).toBe(0);
@@ -681,6 +694,7 @@ describe('processPenalties', () => {
     });
 
     mockS3Send.mockResolvedValueOnce(s3Body({ days: {}, tzOffsetHours: 0 }));
+    mockDdbSend.mockResolvedValueOnce({ Items: [] }); // retry scan
 
     const result = await stripe.processPenalties();
     expect(result.skipped).toBe(1);
@@ -707,6 +721,8 @@ describe('processPenalties', () => {
     mockS3Send.mockResolvedValueOnce({}); // S3 PutObjectCommand (goal history)
     mockDdbSend.mockResolvedValueOnce({ Item: null }); // email lookup
     mockDdbSend.mockResolvedValueOnce({}); // update to 'passed'
+    mockDdbSend.mockResolvedValueOnce({}); // DeleteCommand
+    mockDdbSend.mockResolvedValueOnce({ Items: [] }); // retry scan
 
     const result = await stripe.processPenalties();
     // 0 minutes < 100h → passed
@@ -731,6 +747,7 @@ describe('processPenalties', () => {
     mockS3Send.mockResolvedValueOnce({}); // S3 PutObjectCommand (goal history) for user-m1
     mockDdbSend.mockResolvedValueOnce({ Item: null }); // email lookup
     mockDdbSend.mockResolvedValueOnce({}); // mark passed
+    mockDdbSend.mockResolvedValueOnce({}); // DeleteCommand for user-m1
 
     // user-m2: fails (5 hours > 1 hour)
     mockS3Send.mockResolvedValueOnce(s3Body({
@@ -743,6 +760,8 @@ describe('processPenalties', () => {
     });
     mockStripe.paymentIntents.create.mockResolvedValueOnce({ id: 'pi_m2' });
     mockDdbSend.mockResolvedValueOnce({}); // mark charged
+    mockDdbSend.mockResolvedValueOnce({}); // DeleteCommand for user-m2
+    mockDdbSend.mockResolvedValueOnce({ Items: [] }); // retry scan
 
     const result = await stripe.processPenalties();
     expect(result.processed).toBe(2);
@@ -778,6 +797,8 @@ describe('processPenalties', () => {
 
     mockDdbSend.mockResolvedValueOnce({ Item: null }); // email lookup
     mockDdbSend.mockResolvedValueOnce({}); // update to passed (120min = 2h < 5h)
+    mockDdbSend.mockResolvedValueOnce({}); // DeleteCommand
+    mockDdbSend.mockResolvedValueOnce({ Items: [] }); // retry scan
 
     const result = await stripe.processPenalties();
     expect(result.passed).toBe(1);
@@ -811,7 +832,9 @@ describe('processPenalties', () => {
       Item: { stripe_customer_id: 'cus_p11', stripe_payment_method_id: 'pm_p11' },
     });
     mockStripe.paymentIntents.create.mockResolvedValueOnce({ id: 'pi_legacy' });
-    mockDdbSend.mockResolvedValueOnce({});
+    mockDdbSend.mockResolvedValueOnce({}); // update to charged
+    mockDdbSend.mockResolvedValueOnce({}); // DeleteCommand
+    mockDdbSend.mockResolvedValueOnce({ Items: [] }); // retry scan
 
     const result = await stripe.processPenalties();
     expect(result.charged).toBe(1); // 2h > 1h limit
@@ -843,13 +866,15 @@ describe('processPenalties', () => {
 
     mockDdbSend.mockResolvedValueOnce({ Item: { email: 'ar1@test.com' } }); // email lookup
     mockDdbSend.mockResolvedValueOnce({}); // update to 'passed'
+    mockDdbSend.mockResolvedValueOnce({}); // DeleteCommand
     mockDdbSend.mockResolvedValueOnce({}); // PutCommand for renewal goal
+    mockDdbSend.mockResolvedValueOnce({ Items: [] }); // retry scan
 
     const result = await stripe.processPenalties();
     expect(result.passed).toBe(1);
 
-    // Verify renewal goal was created (4th DDB call: [0]=Scan, [1]=Get email, [2]=Update passed, [3]=Put renewal)
-    const putCall = mockDdbSend.mock.calls[3][0];
+    // Verify renewal goal was created: [0]=Scan, [1]=Get email, [2]=Update passed, [3]=Delete, [4]=Put renewal
+    const putCall = mockDdbSend.mock.calls[4][0];
     expect(putCall.Item.userId).toBe('user-ar1');
     expect(putCall.Item.weekStart).toBe('2026-02-23');
     expect(putCall.Item.weekEnd).toBe('2026-03-01');
@@ -886,11 +911,13 @@ describe('processPenalties', () => {
 
     mockDdbSend.mockResolvedValueOnce({ Item: { email: 'ar2@test.com' } }); // email lookup
     mockDdbSend.mockResolvedValueOnce({}); // update to 'passed'
+    mockDdbSend.mockResolvedValueOnce({}); // DeleteCommand
+    mockDdbSend.mockResolvedValueOnce({ Items: [] }); // retry scan
 
     const result = await stripe.processPenalties();
     expect(result.passed).toBe(1);
-    // Only 3 DDB calls: Scan, Get(email), Update(passed) — no renewal PutCommand
-    expect(mockDdbSend).toHaveBeenCalledTimes(3);
+    // 5 DDB calls: Scan, Get(email), Update(passed), Delete, Scan(retry) — no renewal PutCommand
+    expect(mockDdbSend).toHaveBeenCalledTimes(5);
   });
 
   test('auto-renews goal after CHARGED when autoRenew is true', async () => {
@@ -922,12 +949,15 @@ describe('processPenalties', () => {
     });
     mockStripe.paymentIntents.create.mockResolvedValueOnce({ id: 'pi_ar3' });
     mockDdbSend.mockResolvedValueOnce({}); // update to 'charged'
+    mockDdbSend.mockResolvedValueOnce({}); // DeleteCommand
     mockDdbSend.mockResolvedValueOnce({}); // PutCommand for renewal
+    mockDdbSend.mockResolvedValueOnce({ Items: [] }); // retry scan
 
     const result = await stripe.processPenalties();
     expect(result.charged).toBe(1);
 
-    const putCall = mockDdbSend.mock.calls[3][0];
+    // [0]=Scan, [1]=Get, [2]=Update(charged), [3]=Delete, [4]=Put(renewal)
+    const putCall = mockDdbSend.mock.calls[4][0];
     expect(putCall.Item.weekStart).toBe('2026-02-23');
     expect(putCall.Item.weekEnd).toBe('2026-03-01');
     expect(putCall.Item.status).toBe('active');
@@ -962,11 +992,12 @@ describe('processPenalties', () => {
     stripeErr.code = 'card_declined';
     mockStripe.paymentIntents.create.mockRejectedValueOnce(stripeErr);
     mockDdbSend.mockResolvedValueOnce({}); // update to 'charge_failed'
+    mockDdbSend.mockResolvedValueOnce({ Items: [] }); // retry scan
 
     const result = await stripe.processPenalties();
     expect(result.errors).toBe(1);
-    // No renewal PutCommand: Scan, Get, Update only
-    expect(mockDdbSend).toHaveBeenCalledTimes(3);
+    // No renewal PutCommand: Scan, Get, Update, Scan(retry) only
+    expect(mockDdbSend).toHaveBeenCalledTimes(4);
   });
 });
 

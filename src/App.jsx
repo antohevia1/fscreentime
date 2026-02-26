@@ -9,6 +9,7 @@ import Auth from './pages/Auth';
 import AppShell from './pages/AppShell';
 import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
+import NotFound from './pages/NotFound';
 
 Amplify.configure(amplifyConfig);
 
@@ -49,7 +50,7 @@ function App() {
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/app/*" element={<ProtectedRoute><AppShell /></ProtectedRoute>} />
-            <Route path="*" element={<Navigate to="/" />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>
