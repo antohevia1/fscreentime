@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL;
+import api from '../utils/api';
 
 function StarRating({ value, onChange }) {
   const [hover, setHover] = useState(0);
@@ -42,7 +40,7 @@ export default function FeedbackForm({ onClose }) {
     setError(null);
 
     try {
-      await axios.post(`${API_URL}/contact`, {
+      await api.post('/contact', {
         name: name.trim(),
         email: email.trim(),
         rating,

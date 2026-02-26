@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Amplify } from 'aws-amplify';
 import { amplifyConfig } from './config/amplify';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import ErrorBoundary from './components/ErrorBoundary';
 import Landing from './pages/Landing';
 import Auth from './pages/Auth';
 import AppShell from './pages/AppShell';
@@ -9,11 +10,6 @@ import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
 
 Amplify.configure(amplifyConfig);
-
-// DEBUG: remove after fixing OAuth origin issue
-console.log('[OAuth Debug] current origin:', window.location.origin);
-console.log('[OAuth Debug] redirectSignIn:', amplifyConfig.Auth.Cognito.loginWith.oauth.redirectSignIn);
-console.log('[OAuth Debug] redirectSignOut:', amplifyConfig.Auth.Cognito.loginWith.oauth.redirectSignOut);
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -23,18 +19,20 @@ function ProtectedRoute({ children }) {
 
 function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/privacy" element={<Privacy />} />
-          <Route path="/terms" element={<Terms />} />
-          <Route path="/app/*" element={<ProtectedRoute><AppShell /></ProtectedRoute>} />
-          <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/app/*" element={<ProtectedRoute><AppShell /></ProtectedRoute>} />
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

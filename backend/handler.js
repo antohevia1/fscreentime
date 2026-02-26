@@ -1,6 +1,6 @@
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, PutCommand, QueryCommand } = require('@aws-sdk/lib-dynamodb');
-const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { DynamoDBDocumentClient, PutCommand, QueryCommand, DeleteCommand } = require('@aws-sdk/lib-dynamodb');
+const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command } = require('@aws-sdk/client-s3');
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -221,5 +221,71 @@ module.exports.getGoal = async (event) => {
   } catch (err) {
     console.error('GetGoal error:', err);
     return res(500, { error: 'Failed to retrieve goal' });
+  }
+};
+
+// GET /goals/history — all past goals for the user
+module.exports.getGoalHistory = async (event) => {
+  try {
+    const userId = getUserId(event);
+    if (!userId) return res(401, { error: 'Unauthorized' });
+
+    const result = await ddb.send(new QueryCommand({
+      TableName: GOALS_TABLE,
+      KeyConditionExpression: 'userId = :uid',
+      ExpressionAttributeValues: { ':uid': userId },
+      ScanIndexForward: false,
+    }));
+
+    return res(200, result.Items || []);
+  } catch (err) {
+    console.error('GetGoalHistory error:', err);
+    return res(500, { error: 'Failed to retrieve goal history' });
+  }
+};
+
+// POST /delete-account — remove all user data (S3 + DynamoDB goals)
+module.exports.deleteAccount = async (event) => {
+  try {
+    const userId = getUserId(event);
+    if (!userId) return res(401, { error: 'Unauthorized' });
+
+    const { identityId } = JSON.parse(event.body || '{}');
+    if (!identityId) return res(400, { error: 'Missing identityId' });
+
+    // Delete all S3 objects under the user's prefix
+    let continuationToken;
+    do {
+      const listResp = await s3.send(new ListObjectsV2Command({
+        Bucket: DATA_BUCKET,
+        Prefix: `${identityId}/`,
+        ContinuationToken: continuationToken,
+      }));
+      for (const obj of (listResp.Contents || [])) {
+        await s3.send(new DeleteObjectCommand({
+          Bucket: DATA_BUCKET,
+          Key: obj.Key,
+        }));
+      }
+      continuationToken = listResp.IsTruncated ? listResp.NextContinuationToken : null;
+    } while (continuationToken);
+
+    // Delete all goals from DynamoDB
+    const goalsResult = await ddb.send(new QueryCommand({
+      TableName: GOALS_TABLE,
+      KeyConditionExpression: 'userId = :uid',
+      ExpressionAttributeValues: { ':uid': userId },
+    }));
+    for (const goal of (goalsResult.Items || [])) {
+      await ddb.send(new DeleteCommand({
+        TableName: GOALS_TABLE,
+        Key: { userId, weekStart: goal.weekStart },
+      }));
+    }
+
+    return res(200, { deleted: true });
+  } catch (err) {
+    console.error('DeleteAccount error:', err);
+    return res(500, { error: 'Failed to delete account data' });
   }
 };

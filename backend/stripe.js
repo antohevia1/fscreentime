@@ -96,41 +96,168 @@ module.exports.stripeWebhook = async (event) => {
     return res(400, { error: 'Webhook signature verification failed' });
   }
 
-  if (stripeEvent.type === 'setup_intent.succeeded') {
-    const setupIntent = stripeEvent.data.object;
-    const userId = setupIntent.metadata?.userId;
-    const paymentMethodId = setupIntent.payment_method;
+  switch (stripeEvent.type) {
+    case 'setup_intent.succeeded': {
+      const setupIntent = stripeEvent.data.object;
+      const userId = setupIntent.metadata?.userId;
+      const paymentMethodId = setupIntent.payment_method;
 
-    if (!userId) {
-      console.error('No userId in SetupIntent metadata');
-      return res(400, { error: 'Missing userId in metadata' });
+      if (!userId) {
+        console.error('No userId in SetupIntent metadata');
+        return res(400, { error: 'Missing userId in metadata' });
+      }
+
+      await ddb.send(new UpdateCommand({
+        TableName: PAYMENTS_TABLE,
+        Key: { userId },
+        UpdateExpression: 'SET stripe_payment_method_id = :pm, setup_complete = :sc, updatedAt = :ua',
+        ExpressionAttributeValues: {
+          ':pm': paymentMethodId,
+          ':sc': true,
+          ':ua': new Date().toISOString(),
+        },
+      }));
+
+      console.log(`Payment method saved for user ${userId}: ${paymentMethodId}`);
+
+      const paymentRecord = await ddb.send(new GetCommand({
+        TableName: PAYMENTS_TABLE,
+        Key: { userId },
+      }));
+      const userEmail = paymentRecord.Item?.email;
+      if (userEmail) {
+        await sendEmail(userEmail, templates.paymentSetupComplete(userEmail));
+      }
+      break;
     }
 
-    await ddb.send(new UpdateCommand({
-      TableName: PAYMENTS_TABLE,
-      Key: { userId },
-      UpdateExpression: 'SET stripe_payment_method_id = :pm, setup_complete = :sc, updatedAt = :ua',
-      ExpressionAttributeValues: {
-        ':pm': paymentMethodId,
-        ':sc': true,
-        ':ua': new Date().toISOString(),
-      },
-    }));
+    case 'setup_intent.setup_failed': {
+      const setupIntent = stripeEvent.data.object;
+      const userId = setupIntent.metadata?.userId;
+      const reason = setupIntent.last_setup_error?.message || 'Card setup failed';
+      console.warn(`SetupIntent failed for user ${userId}: ${reason}`);
 
-    console.log(`Payment method saved for user ${userId}: ${paymentMethodId}`);
+      if (userId) {
+        const paymentRecord = await ddb.send(new GetCommand({
+          TableName: PAYMENTS_TABLE,
+          Key: { userId },
+        }));
+        const userEmail = paymentRecord.Item?.email;
+        if (userEmail) {
+          await sendEmail(userEmail, templates.chargeFailed(userEmail, {
+            weekStart: 'N/A',
+            reason: `Card setup failed: ${reason}. Please try adding your card again.`,
+          }));
+        }
+      }
+      break;
+    }
 
-    // Send confirmation email
+    case 'payment_intent.payment_failed': {
+      const paymentIntent = stripeEvent.data.object;
+      const userId = paymentIntent.metadata?.userId;
+      const weekStart = paymentIntent.metadata?.weekStart;
+      const reason = paymentIntent.last_payment_error?.message || 'Payment failed';
+      console.warn(`PaymentIntent failed for user ${userId}: ${reason}`);
+
+      if (userId && weekStart) {
+        await ddb.send(new UpdateCommand({
+          TableName: GOALS_TABLE,
+          Key: { userId, weekStart },
+          UpdateExpression: 'SET #st = :v, failureReason = :fr, lastFailedAt = :lf',
+          ExpressionAttributeNames: { '#st': 'status' },
+          ExpressionAttributeValues: {
+            ':v': 'charge_failed',
+            ':fr': reason,
+            ':lf': new Date().toISOString(),
+          },
+        }));
+
+        const paymentRecord = await ddb.send(new GetCommand({
+          TableName: PAYMENTS_TABLE,
+          Key: { userId },
+        }));
+        const userEmail = paymentRecord.Item?.email;
+        if (userEmail) {
+          await sendEmail(userEmail, templates.chargeFailed(userEmail, { weekStart, reason }));
+        }
+      }
+      break;
+    }
+
+    case 'charge.dispute.created': {
+      const dispute = stripeEvent.data.object;
+      const chargeId = dispute.charge;
+      console.warn(`Dispute created for charge ${chargeId}, amount: ${dispute.amount}, reason: ${dispute.reason}`);
+      // Log for manual review — disputes require human intervention
+      break;
+    }
+
+    default:
+      console.log(`Unhandled webhook event type: ${stripeEvent.type}`);
+  }
+
+  return res(200, { received: true });
+};
+
+/* ─── GET /payment-method — fetch saved card details from Stripe ──── */
+module.exports.getPaymentMethod = async (event) => {
+  try {
+    const userId = getUserId(event);
+    if (!userId) return res(401, { error: 'Unauthorized' });
+
     const paymentRecord = await ddb.send(new GetCommand({
       TableName: PAYMENTS_TABLE,
       Key: { userId },
     }));
-    const userEmail = paymentRecord.Item?.email;
-    if (userEmail) {
-      await sendEmail(userEmail, templates.paymentSetupComplete(userEmail));
-    }
-  }
 
-  return res(200, { received: true });
+    if (!paymentRecord.Item?.stripe_payment_method_id) {
+      return res(200, { hasCard: false });
+    }
+
+    const pm = await stripe.paymentMethods.retrieve(paymentRecord.Item.stripe_payment_method_id);
+    return res(200, {
+      hasCard: true,
+      card: {
+        brand: pm.card.brand,
+        last4: pm.card.last4,
+        exp_month: pm.card.exp_month,
+        exp_year: pm.card.exp_year,
+      },
+    });
+  } catch (err) {
+    console.error('GetPaymentMethod error:', err);
+    return res(500, { error: 'Failed to fetch payment method' });
+  }
+};
+
+/* ─── POST /update-payment-method — replace card via new SetupIntent ─ */
+module.exports.updatePaymentMethod = async (event) => {
+  try {
+    const userId = getUserId(event);
+    if (!userId) return res(401, { error: 'Unauthorized' });
+
+    const paymentRecord = await ddb.send(new GetCommand({
+      TableName: PAYMENTS_TABLE,
+      Key: { userId },
+    }));
+
+    if (!paymentRecord.Item?.stripe_customer_id) {
+      return res(400, { error: 'No Stripe customer found. Please set up a goal first.' });
+    }
+
+    const setupIntent = await stripe.setupIntents.create({
+      customer: paymentRecord.Item.stripe_customer_id,
+      payment_method_types: ['card'],
+      usage: 'off_session',
+      metadata: { userId },
+    });
+
+    return res(200, { client_secret: setupIntent.client_secret });
+  } catch (err) {
+    console.error('UpdatePaymentMethod error:', err);
+    return res(500, { error: 'Failed to create setup intent for card update' });
+  }
 };
 
 /* ─── POST /goals/cancel — user forfeits, charge immediately ─────── */
@@ -480,6 +607,89 @@ module.exports.processPenalties = async () => {
       }
     } catch (err) {
       console.error(`Error processing goal for user ${goal.userId}:`, err);
+      results.errors++;
+    }
+  }
+
+  // ── Retry failed charges (up to 3 attempts, within 3 days) ─────
+  const failedGoals = await ddb.send(new ScanCommand({
+    TableName: GOALS_TABLE,
+    FilterExpression: '#st = :failed',
+    ExpressionAttributeNames: { '#st': 'status' },
+    ExpressionAttributeValues: { ':failed': 'charge_failed' },
+  }));
+
+  for (const failedGoal of (failedGoals.Items || [])) {
+    try {
+      const retryCount = failedGoal.retryCount || 0;
+      if (retryCount >= 3) continue;
+
+      const failedAt = failedGoal.lastFailedAt || failedGoal.chargedAt;
+      if (failedAt) {
+        const daysSinceFail = (Date.now() - new Date(failedAt).getTime()) / 86400000;
+        if (daysSinceFail > 3) {
+          await ddb.send(new UpdateCommand({
+            TableName: GOALS_TABLE,
+            Key: { userId: failedGoal.userId, weekStart: failedGoal.weekStart },
+            UpdateExpression: 'SET #st = :v',
+            ExpressionAttributeNames: { '#st': 'status' },
+            ExpressionAttributeValues: { ':v': 'charge_abandoned' },
+          }));
+          continue;
+        }
+      }
+
+      const paymentInfo = await ddb.send(new GetCommand({
+        TableName: PAYMENTS_TABLE,
+        Key: { userId: failedGoal.userId },
+      }));
+
+      if (!paymentInfo.Item?.stripe_payment_method_id || !paymentInfo.Item?.stripe_customer_id) continue;
+
+      const retryKey = `retry-${failedGoal.userId}-${failedGoal.weekStart}-${retryCount + 1}`;
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: 1000,
+        currency: 'usd',
+        customer: paymentInfo.Item.stripe_customer_id,
+        payment_method: paymentInfo.Item.stripe_payment_method_id,
+        confirm: true,
+        off_session: true,
+        description: `Screen time penalty retry ${retryCount + 1} for week of ${failedGoal.weekStart}`,
+        metadata: {
+          userId: failedGoal.userId,
+          weekStart: failedGoal.weekStart,
+          charity: failedGoal.charity || '',
+          retry: String(retryCount + 1),
+        },
+      }, { idempotencyKey: retryKey });
+
+      console.log(`Retry ${retryCount + 1} succeeded for user ${failedGoal.userId}: ${paymentIntent.id}`);
+      await ddb.send(new UpdateCommand({
+        TableName: GOALS_TABLE,
+        Key: { userId: failedGoal.userId, weekStart: failedGoal.weekStart },
+        UpdateExpression: 'SET #st = :charged, paymentIntentId = :pi, chargedAt = :ca, retryCount = :rc',
+        ExpressionAttributeNames: { '#st': 'status' },
+        ExpressionAttributeValues: {
+          ':charged': 'charged',
+          ':pi': paymentIntent.id,
+          ':ca': new Date().toISOString(),
+          ':rc': retryCount + 1,
+        },
+      }));
+      await tryRenewGoal(failedGoal, paymentInfo.Item?.email);
+      results.charged++;
+    } catch (retryErr) {
+      console.error(`Retry failed for user ${failedGoal.userId}:`, retryErr.message);
+      await ddb.send(new UpdateCommand({
+        TableName: GOALS_TABLE,
+        Key: { userId: failedGoal.userId, weekStart: failedGoal.weekStart },
+        UpdateExpression: 'SET retryCount = :rc, lastFailedAt = :lf, failureReason = :fr',
+        ExpressionAttributeValues: {
+          ':rc': (failedGoal.retryCount || 0) + 1,
+          ':lf': new Date().toISOString(),
+          ':fr': retryErr.message,
+        },
+      }));
       results.errors++;
     }
   }

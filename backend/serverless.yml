@@ -27,7 +27,23 @@ provider:
     APP_URL: ${env:APP_URL, 'https://www.fscreentime.app'}
     STAGE: ${sls:stage}
   httpApi:
-    cors: true
+    cors:
+      allowedOrigins:
+        - https://fscreentime.app
+        - https://www.fscreentime.app
+        - http://localhost:5173
+      allowedMethods:
+        - GET
+        - POST
+        - DELETE
+        - OPTIONS
+      allowedHeaders:
+        - Content-Type
+        - Authorization
+        - x-api-key
+    throttle:
+      burstLimit: 10
+      rateLimit: 20
     authorizers:
       cognitoAuthorizer:
         type: jwt
@@ -43,6 +59,7 @@ provider:
             - dynamodb:PutItem
             - dynamodb:GetItem
             - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
             - dynamodb:Query
             - dynamodb:Scan
           Resource:
@@ -52,12 +69,14 @@ provider:
             - dynamodb:PutItem
             - dynamodb:GetItem
             - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
           Resource:
             - !GetAtt PaymentsTable.Arn
         - Effect: Allow
           Action:
             - s3:PutObject
             - s3:GetObject
+            - s3:DeleteObject
           Resource:
             - !Sub 'arn:aws:s3:::${self:provider.environment.DATA_BUCKET}/*'
         - Effect: Allow
@@ -111,7 +130,44 @@ functions:
           authorizer:
             name: cognitoAuthorizer
 
+  getGoalHistory:
+    handler: handler.getGoalHistory
+    events:
+      - httpApi:
+          path: /goals/history
+          method: get
+          authorizer:
+            name: cognitoAuthorizer
+
+  deleteAccount:
+    handler: handler.deleteAccount
+    timeout: 30
+    events:
+      - httpApi:
+          path: /delete-account
+          method: post
+          authorizer:
+            name: cognitoAuthorizer
+
   # ── Stripe payment endpoints ──────────────────────────────
+  getPaymentMethod:
+    handler: stripe.getPaymentMethod
+    events:
+      - httpApi:
+          path: /payment-method
+          method: get
+          authorizer:
+            name: cognitoAuthorizer
+
+  updatePaymentMethod:
+    handler: stripe.updatePaymentMethod
+    events:
+      - httpApi:
+          path: /update-payment-method
+          method: post
+          authorizer:
+            name: cognitoAuthorizer
+
   createSetupIntent:
     handler: stripe.createSetupIntent
     events:

@@ -5,12 +5,14 @@ import Dashboard from '../components/Dashboard';
 import { LogoText } from '../components/Logo';
 import Goals from './Goals';
 import Ranking from './Ranking';
+import History from './History';
 import FeedbackForm from '../components/FeedbackForm';
 import { fetchScreenTimeData } from '../utils/s3Data';
 
 const navItems = [
   { to: '/app/dashboard', label: 'Dashboard', icon: '◫' },
   { to: '/app/goals', label: 'Goals', icon: '◎' },
+  { to: '/app/history', label: 'History', icon: '☰' },
   { to: '/app/ranking', label: 'Ranking', icon: '▦' },
 ];
 
@@ -22,14 +24,10 @@ export default function AppShell() {
   const [showFeedback, setShowFeedback] = useState(false);
 
   useEffect(() => {
-    console.log('AppShell useEffect triggered with user:', user);
-    console.log(!user?.credentials || !user?.identityId ? 'Missing credentials or identityId' : 'Credentials and identityId are present')
     if (!user?.credentials || !user?.identityId) return;
     fetchScreenTimeData(user.credentials, user.identityId)
       .then(setData)
-      .catch((e) => {
-        // Fallback to sample data during development
-        console.log('Error fetching screen time data, loading sample data instead:', e);
+      .catch(() => {
         fetch('/sample-data.json').then(r => r.json()).then(setData).catch(() => {});
       });
   }, [user]);
@@ -104,6 +102,7 @@ export default function AppShell() {
                 data ? <Dashboard data={data} /> : <p className="text-muted text-sm">Loading…</p>
               } />
               <Route path="goals" element={<Goals data={data} />} />
+              <Route path="history" element={<History />} />
               <Route path="ranking" element={<Ranking />} />
             </Routes>
           </div>

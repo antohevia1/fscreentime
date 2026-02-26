@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import Chart from 'react-apexcharts';
-import axios from 'axios';
+import api from '../utils/api';
 import { parseScreenTimeData } from '../utils/parseData';
 import { useAuth } from '../context/AuthContext';
 import StripePayment from '../components/StripePayment';
@@ -59,8 +59,6 @@ function getChallengeRange() {
   return { startStr: toDateStr(start), endStr: toDateStr(end), numDays };
 }
 
-const API_URL = import.meta.env.VITE_API_URL;
-
 export default function Goals({ data }) {
   const { user } = useAuth();
 
@@ -73,7 +71,7 @@ export default function Goals({ data }) {
   // Fetch active goal from API on mount (server may have auto-renewed it)
   useEffect(() => {
     if (!user?.token) { setGoalLoading(false); return; }
-    axios.get(`${API_URL}/goals`, {
+    api.get('/goals', {
       params: { status: 'active' },
       headers: { Authorization: `Bearer ${user.token}` },
     }).then(resp => {
@@ -107,7 +105,7 @@ export default function Goals({ data }) {
   // Activate the goal: save to backend + localStorage
   const activateGoal = async (g) => {
     try {
-      await axios.post(`${API_URL}/goals`, {
+      await api.post('/goals', {
         ...g,
         identityId: user?.identityId,
         status: 'active',
@@ -135,6 +133,7 @@ export default function Goals({ data }) {
       charityId: charity.id,
       amount: 10,
       autoRenew: true,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       createdAt: new Date().toISOString(),
       weekStart: range.startStr,
       weekEnd: range.endStr,
@@ -147,7 +146,7 @@ export default function Goals({ data }) {
     trackEvent('begin_challenge', { daily_limit: dailyLimit, charity: charity.name });
 
     try {
-      const resp = await axios.post(`${API_URL}/create-setup-intent`, {
+      const resp = await api.post('/create-setup-intent', {
         email: user?.email,
       }, {
         headers: { Authorization: `Bearer ${user?.token}` },
@@ -185,7 +184,7 @@ export default function Goals({ data }) {
     setCancelLoading(true);
     setCancelError(null);
     try {
-      await axios.post(`${API_URL}/goals/cancel`, {
+      await api.post('/goals/cancel', {
         weekStart: goal?.weekStart,
       }, {
         headers: { Authorization: `Bearer ${user?.token}` },
@@ -352,8 +351,8 @@ export default function Goals({ data }) {
             <p className="text-xs text-muted text-center">
               This goal auto-renews weekly. You can cancel renewal anytime from the goal dashboard.
             </p>
-            <button type="submit"
-              className="w-full py-3 rounded-lg bg-caramel text-surface font-semibold text-sm hover:bg-caramel-light transition">
+            <button type="submit" disabled={paymentStep !== null}
+              className="w-full py-3 rounded-lg bg-caramel text-surface font-semibold text-sm hover:bg-caramel-light transition disabled:opacity-50 disabled:cursor-not-allowed">
               Accept Challenge
             </button>
           </form>
@@ -371,16 +370,30 @@ function GoalProgress({ goal, data, onClear, showResetConfirm, setShowResetConfi
   const { user } = useAuth();
   const [renewalCancelling, setRenewalCancelling] = useState(false);
   const [renewalCancelled, setRenewalCancelled] = useState(goal.autoRenew === false);
+  const [showRenewalConfirm, setShowRenewalConfirm] = useState(false);
+
+  // Close modals on Escape key
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') {
+        if (showResetConfirm) setShowResetConfirm(false);
+        if (showRenewalConfirm) setShowRenewalConfirm(false);
+      }
+    };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [showResetConfirm, showRenewalConfirm, setShowResetConfirm]);
 
   const cancelAutoRenew = async () => {
     setRenewalCancelling(true);
     try {
-      await axios.post(`${API_URL}/goals/cancel-renewal`, {
+      await api.post('/goals/cancel-renewal', {
         weekStart: goal.weekStart,
       }, {
         headers: { Authorization: `Bearer ${user?.token}` },
       });
       setRenewalCancelled(true);
+      setShowRenewalConfirm(false);
       const updated = { ...goal, autoRenew: false };
       localStorage.setItem('st_goal', JSON.stringify(updated));
     } catch (err) {
@@ -494,9 +507,9 @@ function GoalProgress({ goal, data, onClear, showResetConfirm, setShowResetConfi
         </div>
         <div className="flex flex-col gap-2 items-end shrink-0">
           {!renewalCancelled && (
-            <button onClick={cancelAutoRenew} disabled={renewalCancelling}
-              className="text-xs text-muted hover:text-caramel border border-border rounded-lg px-3 py-1.5 hover:border-caramel/40 transition disabled:opacity-50">
-              {renewalCancelling ? 'Cancelling...' : 'Cancel Renewal'}
+            <button onClick={() => setShowRenewalConfirm(true)}
+              className="text-xs text-muted hover:text-caramel border border-border rounded-lg px-3 py-1.5 hover:border-caramel/40 transition">
+              Cancel Renewal
             </button>
           )}
           <button onClick={() => setShowResetConfirm(true)}
@@ -524,6 +537,27 @@ function GoalProgress({ goal, data, onClear, showResetConfirm, setShowResetConfi
               <button onClick={onClear} disabled={cancelLoading}
                 className="flex-1 py-2.5 rounded-lg bg-red-500/20 border border-red-500/40 text-sm text-red-400 font-semibold hover:bg-red-500/30 transition disabled:opacity-50 disabled:cursor-not-allowed">
                 {cancelLoading ? 'Processing...' : `Forfeit $${stakeAmount}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRenewalConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="bg-surface-card border border-border rounded-xl p-6 max-w-sm w-full space-y-4">
+            <h3 className="text-lg font-semibold text-cream">Cancel auto-renewal?</h3>
+            <p className="text-sm text-muted leading-relaxed">
+              Your current challenge will continue until <span className="text-cream">{fmtDate(goal.weekEnd)}</span>, but it will not renew for the following week.
+            </p>
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setShowRenewalConfirm(false)} disabled={renewalCancelling}
+                className="flex-1 py-2.5 rounded-lg border border-border text-sm text-muted hover:text-cream hover:border-caramel/40 transition disabled:opacity-50">
+                Keep Renewal
+              </button>
+              <button onClick={cancelAutoRenew} disabled={renewalCancelling}
+                className="flex-1 py-2.5 rounded-lg bg-caramel/20 border border-caramel/40 text-sm text-caramel font-semibold hover:bg-caramel/30 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                {renewalCancelling ? 'Cancelling...' : 'Cancel Renewal'}
               </button>
             </div>
           </div>
