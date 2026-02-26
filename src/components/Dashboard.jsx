@@ -1,8 +1,10 @@
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { NavLink } from 'react-router-dom';
 import Chart from 'react-apexcharts';
 import { parseScreenTimeData } from '../utils/parseData';
 import ContributionsChart from './ContributionsChart';
 import { useAuth } from '../context/AuthContext';
+import api from '../utils/api';
 
 const VIVID = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#A78BFA', '#F97316', '#06B6D4', '#EC4899', '#84CC16', '#F43F5E', '#8B5CF6'];
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -178,7 +180,23 @@ function Dashboard({ data }) {
     };
   }, [filtered, onLegendClick]);
 
+  const appFiltered = useMemo(() => {
+    if (selectedApp === 'all') return parsed;
+    return parsed.filter(d => d.app === selectedApp);
+  }, [parsed, selectedApp]);
+
   const { user } = useAuth();
+  const [activeGoal, setActiveGoal] = useState(undefined);
+
+  useEffect(() => {
+    if (!user?.token) return;
+    api.get('/goals', {
+      params: { status: 'active' },
+      headers: { Authorization: `Bearer ${user.token}` },
+    }).then(r => setActiveGoal(r.data || null))
+      .catch(() => setActiveGoal(null));
+  }, [user?.token]);
+
   if (!parsed.length) return (
     <DashboardEmpty
       userName={user?.alias || user?.email?.split('@')[0]}
@@ -271,12 +289,99 @@ function Dashboard({ data }) {
         ))}
       </div>
 
-      <ContributionsChart data={filtered} />
+      <ContributionsChart data={appFiltered} />
+
+      {/* Goal History */}
+      <GoalHistorySection goalHistory={data.goalHistory} hasActiveGoal={activeGoal != null} />
     </div>
   );
 }
 
 export default Dashboard;
+
+function GoalHistorySection({ goalHistory, hasActiveGoal }) {
+  const goals = goalHistory || [];
+  const fmtDate = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
+  const statusColors = {
+    passed: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
+    charged: 'text-red-400 bg-red-500/10 border-red-500/30',
+    cancelled: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
+    charge_abandoned: 'text-muted bg-surface-hover border-border',
+    failed_no_payment: 'text-muted bg-surface-hover border-border',
+  };
+
+  if (!hasActiveGoal) {
+    return (
+      <div className="bg-surface-card border border-border rounded-xl p-6 relative overflow-hidden">
+        <h3 className="text-sm font-medium text-cream mb-4">Goal History</h3>
+        {goals.length > 0 ? (
+          <div className="relative">
+            <div className="blur-sm pointer-events-none select-none">
+              <GoalHistoryTable goals={goals.slice(0, 3)} fmtDate={fmtDate} statusColors={statusColors} />
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="bg-surface-card/95 border border-caramel/30 rounded-xl px-6 py-5 text-center max-w-xs shadow-lg">
+                <p className="text-cream font-semibold mb-1.5">Unlock your goal history</p>
+                <p className="text-muted text-xs mb-4">Set a weekly screen time goal to track your progress over time.</p>
+                <NavLink to="/app/goals" className="inline-flex px-4 py-2 rounded-lg bg-caramel text-surface text-sm font-semibold hover:bg-caramel-light transition">
+                  Set a Goal
+                </NavLink>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-6">
+            <p className="text-muted text-sm mb-3">No goal history yet. Set a weekly goal to start building your streak.</p>
+            <NavLink to="/app/goals" className="inline-flex px-4 py-2 rounded-lg bg-caramel text-surface text-sm font-semibold hover:bg-caramel-light transition">
+              Set a Goal
+            </NavLink>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (!goals.length) {
+    return (
+      <div className="bg-surface-card border border-border rounded-xl p-5">
+        <h3 className="text-sm font-medium text-cream mb-2">Goal History</h3>
+        <p className="text-muted text-sm">Your first week is in progress. History will appear here after it ends.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-surface-card border border-border rounded-xl p-5">
+      <h3 className="text-sm font-medium text-cream mb-3">Goal History</h3>
+      <GoalHistoryTable goals={goals} fmtDate={fmtDate} statusColors={statusColors} />
+    </div>
+  );
+}
+
+function GoalHistoryTable({ goals, fmtDate, statusColors }) {
+  const sorted = [...goals].sort((a, b) => (b.weekStart || '').localeCompare(a.weekStart || ''));
+  return (
+    <div className="space-y-2">
+      {sorted.map((g, i) => (
+        <div key={i} className="flex items-center gap-3 bg-surface border border-border rounded-lg px-3 py-2.5">
+          <div className="flex-1 min-w-0">
+            <p className="text-cream text-sm font-medium">
+              {fmtDate(g.weekStart)} – {fmtDate(g.weekEnd)}
+            </p>
+            <p className="text-muted text-xs mt-0.5">
+              {g.screenTimeHours != null ? `${g.screenTimeHours}h` : '—'} / {g.goalHours}h limit
+              {g.dailyLimit ? ` · ${g.dailyLimit}h/day` : ''}
+              {g.charity ? ` · ${g.charity}` : ''}
+            </p>
+          </div>
+          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${statusColors[g.status] || 'text-muted bg-surface-hover border-border'}`}>
+            {g.status === 'passed' ? 'Passed' : g.status === 'charged' ? 'Charged $10' : g.status === 'cancelled' ? 'Cancelled' : g.status?.replace(/_/g, ' ') || 'unknown'}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function CopyField({ value }) {
   const [copied, setCopied] = useState(false);

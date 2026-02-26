@@ -27,7 +27,7 @@ const TESTIMONIALS = [
   },
   {
     name: "Priya R.",
-    text: "The $5 charity stake sounds small but it completely changed my behavior.",
+    text: "The $10 charity stake sounds small but it completely changed my behavior.",
     saved: "14h/week",
   },
   {
@@ -123,7 +123,7 @@ export default function Landing() {
             <div key={rep} className="flex gap-12 shrink-0">
               {[
                 "🔥 Alex just saved 3.2h today",
-                "💰 $5 donated to Red Cross by Maria",
+                "💰 $10 donated to Red Cross by Maria",
                 "🏆 Sam hit 7 day streak",
                 "📉 Priya reduced screen time by 40%",
                 "🎯 Luna completed her weekly challenge",
@@ -401,11 +401,11 @@ export default function Landing() {
                     </svg>
                   </Icon3D>
                 }
-                desc="Select where your $5 goes if you miss the goal. Every dollar does good either way."
+                desc="Select where your $10 goes if you miss the goal. Every dollar does good either way."
               />
               <StepCard
                 step="06"
-                title="Stake $5"
+                title="Stake $10"
                 icon={
                   <Icon3D
                     color="from-[#A78BFA] to-[#7C5FD3]"
@@ -494,16 +494,16 @@ export default function Landing() {
                   The science of commitment
                 </span>
                 <h2 className="text-3xl md:text-4xl font-bold leading-tight mb-6">
-                  $5 is nothing.
+                  $10 is nothing.
                   <br />
                   <span className="text-caramel">
-                    Losing $5 changes everything.
+                    Losing $10 changes everything.
                   </span>
                 </h2>
                 <p className="text-muted leading-relaxed mb-6">
                   Nobel Prize winning research shows you are 2.5× more motivated
                   to avoid a loss than to chase a gain. Set a weekly screen time
-                  goal, put $5 behind it, and choose a charity. Miss your target
+                  goal, put $10 behind it, and choose a charity. Miss your target
                   and the money goes to a good cause. Hit it and you keep your
                   time, your money, and your momentum.
                 </p>
@@ -523,7 +523,7 @@ export default function Landing() {
                   },
                   {
                     icon: "💰",
-                    title: "Stake $5 per week",
+                    title: "Stake $10 per week",
                     desc: "Small enough to commit, big enough to care",
                   },
                   {
@@ -641,11 +641,11 @@ export default function Landing() {
             {[
               {
                 q: "Is fScreentime really free?",
-                a: "Yes. The dashboard and analytics are completely free. You only pay $5 when you choose to set a weekly challenge goal.",
+                a: "Yes. The dashboard and analytics are completely free. You only pay $10 when you choose to set a weekly challenge goal.",
               },
               {
-                q: "How does the $5 challenge work?",
-                a: "You set a daily screen time limit and stake $5. If you exceed your weekly budget, the money (minus a 10% service fee) is donated to your chosen charity. If you hit your goal, the challenge rolls over to the next week.",
+                q: "How does the $10 challenge work?",
+                a: "You set a daily screen time limit and stake $10. If you exceed your weekly budget, the money (minus a 10% service fee) is donated to your chosen charity. If you hit your goal, the challenge rolls over to the next week.",
               },
               {
                 q: "What happens to my data?",

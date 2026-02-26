@@ -23,9 +23,7 @@ function StarRating({ value, onChange }) {
   );
 }
 
-export default function FeedbackForm({ onClose }) {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+export default function FeedbackForm({ onClose, user }) {
   const [rating, setRating] = useState(0);
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -41,8 +39,8 @@ export default function FeedbackForm({ onClose }) {
 
     try {
       await api.post('/contact', {
-        name: name.trim(),
-        email: email.trim(),
+        name: user?.alias || '',
+        email: user?.email || '',
         rating,
         message: message.trim(),
       });
@@ -74,30 +72,6 @@ export default function FeedbackForm({ onClose }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="block text-sm text-muted mb-1">Name (optional)</label>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          maxLength={100}
-          className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-cream text-sm focus:outline-none focus:border-caramel transition"
-          placeholder="Your name"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm text-muted mb-1">Email (optional)</label>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          maxLength={254}
-          className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-cream text-sm focus:outline-none focus:border-caramel transition"
-          placeholder="your@email.com"
-        />
-      </div>
-
       <div>
         <label className="block text-sm text-muted mb-1">Rating</label>
         <StarRating value={rating} onChange={setRating} />

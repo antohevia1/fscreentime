@@ -5,15 +5,15 @@ import Dashboard from '../components/Dashboard';
 import { LogoText } from '../components/Logo';
 import Goals from './Goals';
 import Ranking from './Ranking';
-import History from './History';
+import Settings from './Settings';
 import FeedbackForm from '../components/FeedbackForm';
 import { fetchScreenTimeData } from '../utils/s3Data';
 
 const navItems = [
   { to: '/app/dashboard', label: 'Dashboard', icon: '◫' },
   { to: '/app/goals', label: 'Goals', icon: '◎' },
-  { to: '/app/history', label: 'History', icon: '☰' },
-  { to: '/app/ranking', label: 'Ranking', icon: '▦' },
+  { to: '/app/ranking', label: 'Ranking', icon: '▦', desktopOnly: true },
+  { to: '/app/settings', label: 'Settings', icon: '⚙' },
 ];
 
 export default function AppShell() {
@@ -102,7 +102,7 @@ export default function AppShell() {
                 data ? <Dashboard data={data} /> : <p className="text-muted text-sm">Loading…</p>
               } />
               <Route path="goals" element={<Goals data={data} />} />
-              <Route path="history" element={<History />} />
+              <Route path="settings" element={<Settings />} />
               <Route path="ranking" element={<Ranking />} />
             </Routes>
           </div>
@@ -110,7 +110,7 @@ export default function AppShell() {
 
         {/* Mobile bottom tab bar */}
         <nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 bg-surface-light border-t border-border flex">
-          {navItems.map(item => (
+          {navItems.filter(item => !item.desktopOnly).map(item => (
             <NavLink key={item.to} to={item.to}
               className={({ isActive }) =>
                 `flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs transition ${
@@ -140,7 +140,7 @@ export default function AppShell() {
           <div className="absolute inset-0 bg-black/60" onClick={() => setShowFeedback(false)} />
           <div className="relative bg-surface-light border border-border rounded-xl w-full max-w-md p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-cream mb-4">Send Feedback</h2>
-            <FeedbackForm onClose={() => setShowFeedback(false)} />
+            <FeedbackForm onClose={() => setShowFeedback(false)} user={user} />
           </div>
         </div>
       )}

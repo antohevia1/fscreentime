@@ -224,20 +224,30 @@ module.exports.getGoal = async (event) => {
   }
 };
 
-// GET /goals/history — all past goals for the user
+// GET /goals/history — read past goals from S3 all.json
 module.exports.getGoalHistory = async (event) => {
   try {
     const userId = getUserId(event);
     if (!userId) return res(401, { error: 'Unauthorized' });
 
-    const result = await ddb.send(new QueryCommand({
-      TableName: GOALS_TABLE,
-      KeyConditionExpression: 'userId = :uid',
-      ExpressionAttributeValues: { ':uid': userId },
-      ScanIndexForward: false,
-    }));
+    const { identityId } = event.queryStringParameters || {};
+    if (!identityId) return res(400, { error: 'Missing identityId' });
 
-    return res(200, result.Items || []);
+    let allData;
+    try {
+      const s3Resp = await s3.send(new GetObjectCommand({
+        Bucket: DATA_BUCKET,
+        Key: `${identityId}/all.json`,
+      }));
+      allData = JSON.parse(await s3Resp.Body.transformToString());
+    } catch (err) {
+      if (err.name === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404) {
+        return res(200, []);
+      }
+      throw err;
+    }
+
+    return res(200, allData.goalHistory || []);
   } catch (err) {
     console.error('GetGoalHistory error:', err);
     return res(500, { error: 'Failed to retrieve goal history' });

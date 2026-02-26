@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Amplify } from 'aws-amplify';
 import { amplifyConfig } from './config/amplify';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -11,6 +12,25 @@ import Terms from './pages/Terms';
 
 Amplify.configure(amplifyConfig);
 
+const PAGE_TITLES = {
+  '/': 'fScreentime — Reclaim Your Hours, Challenge Your Habits',
+  '/auth': 'Sign In — fScreentime',
+  '/privacy': 'Privacy Policy — fScreentime',
+  '/terms': 'Terms of Service — fScreentime',
+  '/app/dashboard': 'Dashboard — fScreentime',
+  '/app/goals': 'Goals — fScreentime',
+  '/app/settings': 'Settings — fScreentime',
+  '/app/ranking': 'Ranking — fScreentime',
+};
+
+function PageTitleUpdater() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    document.title = PAGE_TITLES[pathname] || 'fScreentime';
+  }, [pathname]);
+  return null;
+}
+
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen bg-surface flex items-center justify-center"><p className="text-muted text-sm">Loading…</p></div>;
@@ -22,6 +42,7 @@ function App() {
     <ErrorBoundary>
       <AuthProvider>
         <BrowserRouter>
+          <PageTitleUpdater />
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/auth" element={<Auth />} />

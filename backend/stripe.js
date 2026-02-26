@@ -1,5 +1,5 @@
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, PutCommand, GetCommand, UpdateCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBDocumentClient, PutCommand, GetCommand, UpdateCommand, ScanCommand, DeleteCommand } = require('@aws-sdk/lib-dynamodb');
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 const Stripe = require('stripe');
 const { sendEmail, templates } = require('./email');
@@ -288,16 +288,15 @@ module.exports.cancelGoal = async (event) => {
 
     if (!paymentInfo.Item?.stripe_payment_method_id || !paymentInfo.Item?.stripe_customer_id) {
       // No card on file — just mark cancelled without charge
-      await ddb.send(new UpdateCommand({
-        TableName: GOALS_TABLE,
-        Key: { userId, weekStart },
-        UpdateExpression: 'SET #st = :v, cancelledAt = :ca',
-        ExpressionAttributeNames: { '#st': 'status' },
-        ExpressionAttributeValues: {
-          ':v': 'cancelled',
-          ':ca': new Date().toISOString(),
-        },
-      }));
+      if (goal.identityId) {
+        await saveGoalToHistory(goal.identityId, {
+          weekStart, weekEnd: goal.weekEnd,
+          goalHours: goal.weeklyLimit || (goal.dailyLimit * (goal.numDays || 7)),
+          dailyLimit: goal.dailyLimit, charity: goal.charity || '',
+          status: 'cancelled', charged: false, processedAt: new Date().toISOString(),
+        });
+      }
+      await ddb.send(new DeleteCommand({ TableName: GOALS_TABLE, Key: { userId, weekStart } }));
 
       if (paymentInfo.Item?.email) {
         await sendEmail(paymentInfo.Item.email, templates.goalCancelled(paymentInfo.Item.email, { weekStart, charged: false, amount: 0 }));
@@ -323,18 +322,17 @@ module.exports.cancelGoal = async (event) => {
       },
     }, { idempotencyKey });
 
-    // Update DynamoDB status to cancelled
-    await ddb.send(new UpdateCommand({
-      TableName: GOALS_TABLE,
-      Key: { userId, weekStart },
-      UpdateExpression: 'SET #st = :v, paymentIntentId = :pi, cancelledAt = :ca',
-      ExpressionAttributeNames: { '#st': 'status' },
-      ExpressionAttributeValues: {
-        ':v': 'cancelled',
-        ':pi': paymentIntent.id,
-        ':ca': new Date().toISOString(),
-      },
-    }));
+    // Save to history and remove from DDB
+    if (goal.identityId) {
+      await saveGoalToHistory(goal.identityId, {
+        weekStart, weekEnd: goal.weekEnd,
+        goalHours: goal.weeklyLimit || (goal.dailyLimit * (goal.numDays || 7)),
+        dailyLimit: goal.dailyLimit, charity: goal.charity || '',
+        status: 'cancelled', charged: true, amount: 1000,
+        processedAt: new Date().toISOString(),
+      });
+    }
+    await ddb.send(new DeleteCommand({ TableName: GOALS_TABLE, Key: { userId, weekStart } }));
 
     if (paymentInfo.Item?.email) {
       await sendEmail(paymentInfo.Item.email, templates.goalCancelled(paymentInfo.Item.email, { weekStart, charged: true, amount: 1000 }));
@@ -465,21 +463,6 @@ module.exports.processPenalties = async () => {
       const failed = screenTimeHours > goalHours;
       console.log(`User ${userId} (${allData.timezone || 'UTC'}): ${screenTimeHours.toFixed(1)}h / ${goalHours}h → ${failed ? 'FAILED' : 'PASSED'}`);
 
-      // Append to goal history in all.json
-      if (!allData.goalHistory) allData.goalHistory = [];
-      allData.goalHistory.push({
-        weekStart,
-        weekEnd,
-        goalHours,
-        screenTimeHours: parseFloat(screenTimeHours.toFixed(1)),
-      });
-      await s3.send(new PutObjectCommand({
-        Bucket: DATA_BUCKET,
-        Key: `${identityId}/all.json`,
-        Body: JSON.stringify(allData),
-        ContentType: 'application/json',
-      }));
-
       // Look up email for notifications
       const userRecord = await ddb.send(new GetCommand({
         TableName: PAYMENTS_TABLE,
@@ -500,6 +483,15 @@ module.exports.processPenalties = async () => {
             weekStart, weekEnd, screenTimeHours: screenTimeHours.toFixed(1), goalHours,
           }));
         }
+        if (identityId) {
+          await saveGoalToHistory(identityId, {
+            weekStart, weekEnd, goalHours,
+            screenTimeHours: parseFloat(screenTimeHours.toFixed(1)),
+            dailyLimit: goal.dailyLimit, charity: goal.charity || '',
+            status: 'passed', processedAt: new Date().toISOString(),
+          }, allData);
+          await ddb.send(new DeleteCommand({ TableName: GOALS_TABLE, Key: { userId, weekStart } }));
+        }
         await tryRenewGoal(goal, userEmail);
         results.passed++;
         continue;
@@ -517,6 +509,15 @@ module.exports.processPenalties = async () => {
           ExpressionAttributeNames: { '#st': 'status' },
           ExpressionAttributeValues: { ':v': 'failed_no_payment' },
         }));
+        if (identityId) {
+          await saveGoalToHistory(identityId, {
+            weekStart, weekEnd, goalHours,
+            screenTimeHours: parseFloat(screenTimeHours.toFixed(1)),
+            dailyLimit: goal.dailyLimit, charity: goal.charity || '',
+            status: 'failed_no_payment', processedAt: new Date().toISOString(),
+          }, allData);
+          await ddb.send(new DeleteCommand({ TableName: GOALS_TABLE, Key: { userId, weekStart } }));
+        }
         results.errors++;
         continue;
       }
@@ -560,6 +561,15 @@ module.exports.processPenalties = async () => {
             weekStart, weekEnd, screenTimeHours: screenTimeHours.toFixed(1), goalHours,
             amount: 1000, charity: goal.charity || '',
           }));
+        }
+        if (identityId) {
+          await saveGoalToHistory(identityId, {
+            weekStart, weekEnd, goalHours,
+            screenTimeHours: parseFloat(screenTimeHours.toFixed(1)),
+            dailyLimit: goal.dailyLimit, charity: goal.charity || '',
+            status: 'charged', amount: 1000, processedAt: new Date().toISOString(),
+          }, allData);
+          await ddb.send(new DeleteCommand({ TableName: GOALS_TABLE, Key: { userId, weekStart } }));
         }
         await tryRenewGoal(goal, userEmail);
         results.charged++;
@@ -628,12 +638,17 @@ module.exports.processPenalties = async () => {
       if (failedAt) {
         const daysSinceFail = (Date.now() - new Date(failedAt).getTime()) / 86400000;
         if (daysSinceFail > 3) {
-          await ddb.send(new UpdateCommand({
+          if (failedGoal.identityId) {
+            await saveGoalToHistory(failedGoal.identityId, {
+              weekStart: failedGoal.weekStart, weekEnd: failedGoal.weekEnd,
+              goalHours: failedGoal.weeklyLimit || (failedGoal.dailyLimit * (failedGoal.numDays || 7)),
+              dailyLimit: failedGoal.dailyLimit, charity: failedGoal.charity || '',
+              status: 'charge_abandoned', processedAt: new Date().toISOString(),
+            });
+          }
+          await ddb.send(new DeleteCommand({
             TableName: GOALS_TABLE,
             Key: { userId: failedGoal.userId, weekStart: failedGoal.weekStart },
-            UpdateExpression: 'SET #st = :v',
-            ExpressionAttributeNames: { '#st': 'status' },
-            ExpressionAttributeValues: { ':v': 'charge_abandoned' },
           }));
           continue;
         }
@@ -676,6 +691,18 @@ module.exports.processPenalties = async () => {
           ':rc': retryCount + 1,
         },
       }));
+      if (failedGoal.identityId) {
+        await saveGoalToHistory(failedGoal.identityId, {
+          weekStart: failedGoal.weekStart, weekEnd: failedGoal.weekEnd,
+          goalHours: failedGoal.weeklyLimit || (failedGoal.dailyLimit * (failedGoal.numDays || 7)),
+          dailyLimit: failedGoal.dailyLimit, charity: failedGoal.charity || '',
+          status: 'charged', amount: 1000, processedAt: new Date().toISOString(),
+        });
+        await ddb.send(new DeleteCommand({
+          TableName: GOALS_TABLE,
+          Key: { userId: failedGoal.userId, weekStart: failedGoal.weekStart },
+        }));
+      }
       await tryRenewGoal(failedGoal, paymentInfo.Item?.email);
       results.charged++;
     } catch (retryErr) {
@@ -727,6 +754,29 @@ function buildRenewalGoal(goal) {
     ttl: Math.floor(Date.now() / 1000) + 365 * 24 * 3600,
     renewedFrom: goal.weekStart,
   };
+}
+
+async function saveGoalToHistory(identityId, entry, existingData) {
+  let allData = existingData;
+  if (!allData) {
+    try {
+      const s3Resp = await s3.send(new GetObjectCommand({
+        Bucket: DATA_BUCKET,
+        Key: `${identityId}/all.json`,
+      }));
+      allData = JSON.parse(await s3Resp.Body.transformToString());
+    } catch {
+      allData = { days: {} };
+    }
+  }
+  if (!allData.goalHistory) allData.goalHistory = [];
+  allData.goalHistory.push(entry);
+  await s3.send(new PutObjectCommand({
+    Bucket: DATA_BUCKET,
+    Key: `${identityId}/all.json`,
+    Body: JSON.stringify(allData),
+    ContentType: 'application/json',
+  }));
 }
 
 async function tryRenewGoal(goal, userEmail) {
