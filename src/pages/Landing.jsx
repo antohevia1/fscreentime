@@ -290,7 +290,7 @@ export default function Landing() {
               />
               <StepCard
                 step="02"
-                title="Get fScreen Shortcut"
+                title="Get Our Shortcut"
                 icon={
                   <div
                     className="w-16 h-16 rounded-[18px] shadow-xl shadow-caramel/25 flex items-center justify-center relative overflow-hidden"
@@ -317,7 +317,7 @@ export default function Landing() {
                   </div>
                 }
                 iconLink={import.meta.env.VITE_SHORTCUT_URL}
-                desc="Download our shortcut and paste your Identity ID when prompted. It syncs your screen time automatically."
+                desc={<>Download our shortcut and paste your Identity ID when prompted. <span className="inline-block mt-1 text-caramel font-semibold">Requires iOS 26 or later.</span></>}
               />
               <StepCard
                 step="03"

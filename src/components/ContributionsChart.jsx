@@ -37,10 +37,11 @@ function ContributionsChart({ data }) {
     let current = new Date(alignedStart);
     let lastMonth = -1;
 
+    const toLocal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     while (current <= end) {
       const dow = current.getDay();
       if (dow === 0) weeks.push([]);
-      const dateStr = current.toISOString().split('T')[0];
+      const dateStr = toLocal(current);
       const inRange = current >= start && current <= end;
       weeks[weeks.length - 1].push({ date: dateStr, value: map[dateStr] || 0, inRange });
 
@@ -98,11 +99,13 @@ function ContributionsChart({ data }) {
                       onMouseEnter={e => {
                         if (!day.inRange) return;
                         const rect = e.target.getBoundingClientRect();
-                        setTooltip({ x: rect.left + rect.width / 2, y: rect.top - 8, text: `${day.date} · ${(day.value / 60).toFixed(1)}h` });
+                        const h = Math.floor(day.value / 60); const mn = Math.round(day.value % 60);
+                        const t = h > 0 ? `${h}h ${mn}m` : `${mn}m`;
+                        setTooltip({ x: rect.left + rect.width / 2, y: rect.top - 8, text: `${day.date} · ${t}` });
                       }}
                       onMouseLeave={() => setTooltip(null)}
                       role="img"
-                      aria-label={day.inRange ? `${day.date}: ${(day.value / 60).toFixed(1)} hours` : ''}
+                      aria-label={day.inRange ? `${day.date}: ${Math.floor(day.value / 60)}h ${Math.round(day.value % 60)}m` : ''}
                     />
                   ))}
                 </div>

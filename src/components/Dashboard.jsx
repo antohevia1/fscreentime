@@ -29,8 +29,8 @@ function Dashboard({ data }) {
     setSelectedApp(prev => prev === appName ? 'all' : appName);
   }, []);
 
-  const fmt = m => `${(m / 60).toFixed(1)}h`;
-  const ttFmt = v => `${v.toFixed(1)}h`;
+  const fmt = m => { const h = Math.floor(m / 60); const mn = Math.round(m % 60); return h > 0 ? `${h}h ${mn}m` : `${mn}m`; };
+  const ttFmt = v => { const m = v * 60; const h = Math.floor(m / 60); const mn = Math.round(m % 60); return h > 0 ? `${h}h ${mn}m` : `${mn}m`; };
 
   // For the DoW chart we use a custom legend so clicking filters data rather than toggling series visibility
   const dowChart = useMemo(() => {
@@ -122,7 +122,7 @@ function Dashboard({ data }) {
         chart: { ...darkChart.chart, type: 'area', stacked: true, events: {} },
         xaxis: { categories: dates, labels: { rotate: -45, rotateAlways: dates.length > 14 } },
         yaxis: { title: { text: 'Hours', style: { color: '#9a8e80' } } },
-        stroke: { curve: 'smooth', width: 1 },
+        stroke: { curve: 'straight', width: 1 },
         fill: { type: 'gradient', gradient: { opacityFrom: 0.5, opacityTo: 0.05 } },
         tooltip: { y: { formatter: ttFmt } },
         legend: { show: false },
@@ -516,7 +516,7 @@ function DashboardEmpty({ userName, identityId }) {
       buttonText: 'I have Shortcuts installed',
     },
     {
-      title: 'Get fScreen Shortcut',
+      title: 'Get Our Shortcut',
       summary: 'Download our shortcut and paste your Identity ID.',
       icon: (
         <div
@@ -537,7 +537,7 @@ function DashboardEmpty({ userName, identityId }) {
           <ol className="text-sm text-muted space-y-2 mb-5 list-none pl-0">
             <li className="flex gap-3">
               <span className="text-caramel font-semibold shrink-0">1.</span>
-              <span>Tap <span className="text-cream">Get fScreen Shortcut</span> below and hit <span className="text-cream">Set Up Shortcut</span>.</span>
+              <span>Tap <span className="text-cream">Get Our Shortcut</span> below and hit <span className="text-cream">Set Up Shortcut</span>.</span>
             </li>
             <li className="flex gap-3">
               <span className="text-caramel font-semibold shrink-0">2.</span>
@@ -545,7 +545,7 @@ function DashboardEmpty({ userName, identityId }) {
             </li>
             <li className="flex gap-3">
               <span className="text-caramel font-semibold shrink-0">3.</span>
-              <span>When asked for permissions, tap <span className="text-cream font-semibold">Always Allow</span>.</span>
+              <span>Run the shortcut once by tapping it. When asked for permissions, tap <span className="text-cream font-semibold">Always Allow</span>.</span>
             </li>
           </ol>
           <CopyField value={identityId} />
@@ -568,7 +568,7 @@ function DashboardEmpty({ userName, identityId }) {
               <polyline points="7 10 12 15 17 10" />
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
-            Get fScreen Shortcut
+            Get Our Shortcut
           </a>
         </>
       ),

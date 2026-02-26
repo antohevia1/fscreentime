@@ -236,7 +236,11 @@ export default function Goals({ data }) {
 
           <div className="bg-surface-light rounded-lg p-4 border border-border mb-6 space-y-2">
             <p className="text-sm text-muted">If you exceed <span className="text-cream">{weeklyBudget}h</span> this period:</p>
-            <p className="text-caramel font-semibold">Stake money: $10.00 → {charity?.name}</p>
+            <p className="text-caramel font-semibold">$10.00 → {charity?.name}</p>
+            <div className="flex gap-4 text-xs text-muted pt-1 border-t border-border/50">
+              <span>Donation: <span className="text-cream">$9.00</span></span>
+              <span>Service fee (10%): <span className="text-cream">$1.00</span></span>
+            </div>
           </div>
 
           <StripePayment
@@ -346,7 +350,11 @@ export default function Goals({ data }) {
 
             <div className="bg-surface-light rounded-lg p-4 border border-border space-y-2">
               <p className="text-sm text-muted">If you exceed <span className="text-cream">{weeklyBudget}h</span> this period:</p>
-              <p className="text-caramel font-semibold">Stake money: $10.00 → {CHARITIES.find(c => c.id === selectedCharity)?.name}</p>
+              <p className="text-caramel font-semibold">$10.00 → {CHARITIES.find(c => c.id === selectedCharity)?.name}</p>
+              <div className="flex gap-4 text-xs text-muted pt-1 border-t border-border/50">
+                <span>Donation: <span className="text-cream">$9.00</span></span>
+                <span>Service fee (10%): <span className="text-cream">$1.00</span></span>
+              </div>
             </div>
             <p className="text-xs text-muted text-center">
               This goal auto-renews weekly. You can cancel renewal anytime from the goal dashboard.
