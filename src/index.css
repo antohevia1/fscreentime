@@ -46,6 +46,17 @@ body {
   transform: translateY(0);
 }
 
+/* Blog drop cap */
+.blog-drop-cap > p:first-of-type::first-letter {
+  float: left;
+  font-size: 3.6em;
+  line-height: 0.8;
+  padding-right: 0.12em;
+  padding-top: 0.06em;
+  color: #c4956a;
+  font-weight: 700;
+}
+
 /* ApexCharts dark overrides */
 .apexcharts-tooltip { background: #2e2a24 !important; border-color: #3e3830 !important; color: #f5efe6 !important; }
 .apexcharts-tooltip-title { background: #3a352e !important; border-color: #3e3830 !important; color: #f5efe6 !important; }

@@ -10,6 +10,7 @@ import AppShell from './pages/AppShell';
 import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
 import NotFound from './pages/NotFound';
+import Blog from './pages/Blog';
 
 Amplify.configure(amplifyConfig);
 
@@ -22,6 +23,8 @@ const PAGE_TITLES = {
   '/app/goals': 'Goals — fScreentime',
   '/app/settings': 'Settings — fScreentime',
   '/app/ranking': 'Ranking — fScreentime',
+  '/blog': 'Journal — fScreentime',
+  '/blog/screen-time-under-control': 'The Quiet War for Your Attention — fScreentime',
 };
 
 function PageTitleUpdater() {
@@ -49,6 +52,8 @@ function App() {
             <Route path="/auth" element={<Auth />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
+            <Route path="/blog" element={<Blog />} />
+            <Route path="/blog/:slug" element={<Blog />} />
             <Route path="/app/*" element={<ProtectedRoute><AppShell /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

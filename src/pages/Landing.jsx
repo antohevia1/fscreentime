@@ -63,6 +63,12 @@ export default function Landing() {
             How it works
           </a>
           <Link
+            to="/blog"
+            className="text-sm text-muted hover:text-cream transition hidden sm:block"
+          >
+            Journal
+          </Link>
+          <Link
             to={user ? "/app" : "/auth"}
             className="text-sm px-5 py-2 rounded-full bg-caramel text-surface font-medium hover:bg-caramel-light transition"
           >
@@ -691,6 +697,9 @@ export default function Landing() {
             <a href="#how" className="hover:text-cream transition">
               How it works
             </a>
+            <Link to="/blog" className="hover:text-cream transition">
+              Journal
+            </Link>
             <Link to="/privacy" className="hover:text-cream transition">
               Privacy
             </Link>

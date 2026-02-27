@@ -122,7 +122,7 @@ function Dashboard({ data }) {
         chart: { ...darkChart.chart, type: 'area', stacked: true, events: {} },
         xaxis: { categories: dates, labels: { rotate: -45, rotateAlways: dates.length > 14 } },
         yaxis: { title: { text: 'Hours', style: { color: '#9a8e80' } } },
-        stroke: { curve: 'straight', width: 1 },
+        stroke: { curve: 'smooth', width: 1 },
         fill: { type: 'gradient', gradient: { opacityFrom: 0.5, opacityTo: 0.05 } },
         tooltip: { y: { formatter: ttFmt } },
         legend: { show: false },
