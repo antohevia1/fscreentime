@@ -7,6 +7,126 @@ import StripePayment from '../components/StripePayment';
 import { trackEvent } from '../utils/analytics';
 import { VIVID, APP_BRAND_COLORS, darkChart, ttFmt, fmt } from '../utils/dashboardUtils';
 
+const EXCLUDABLE_APPS = [
+  { store: 'WhatsApp Messenger', ios: 'WhatsApp' },
+  { store: 'WhatsApp Business', ios: 'WA Business' },
+  { store: 'Facebook Messenger', ios: 'Messenger' },
+  { store: 'Instagram', ios: 'Instagram' },
+  { store: 'TikTok - Videos Shop', ios: 'TikTok' },
+  { store: 'X (formerly Twitter)', ios: 'X' },
+  { store: 'Snapchat', ios: 'Snapchat' },
+  { store: 'Pinterest: Design Home', ios: 'Pinterest' },
+  { store: 'Telegram Messenger', ios: 'Telegram' },
+  { store: 'Discord: Talk Chat', ios: 'Discord' },
+  { store: 'LinkedIn: Network Job', ios: 'LinkedIn' },
+  { store: 'Reddit', ios: 'Reddit' },
+  { store: 'Threads an Instagram app', ios: 'Threads' },
+  { store: 'BeReal. Your friends real.', ios: 'BeReal' },
+  { store: 'Signal - Private Messenger', ios: 'Signal' },
+  { store: 'Life360: Find Friends', ios: 'Life360' },
+  { store: 'Bumble - Dating Friends', ios: 'Bumble' },
+  { store: 'Tinder: Dating Friends', ios: 'Tinder' },
+  { store: 'Hinge: Dating Friends', ios: 'Hinge' },
+  { store: 'YouTube: Watch Listen', ios: 'YouTube' },
+  { store: 'Netflix', ios: 'Netflix' },
+  { store: 'Disney+', ios: 'Disney+' },
+  { store: 'HBO Max: Stream TV', ios: 'Max' },
+  { store: 'Hulu: Stream TV', ios: 'Hulu' },
+  { store: 'Prime Video', ios: 'Prime Video' },
+  { store: 'Paramount+', ios: 'Paramount+' },
+  { store: 'Peacock TV', ios: 'Peacock' },
+  { store: 'Twitch: Live Game Stream', ios: 'Twitch' },
+  { store: 'Tubi: Movies TV', ios: 'Tubi' },
+  { store: 'Spotify: Music Podcast', ios: 'Spotify' },
+  { store: 'SoundCloud: Play Music', ios: 'SoundCloud' },
+  { store: 'Pandora: Music Podcast', ios: 'Pandora' },
+  { store: 'Amazon Music', ios: 'Amazon Music' },
+  { store: 'YouTube Music', ios: 'YT Music' },
+  { store: 'Audible: Audiobooks', ios: 'Audible' },
+  { store: 'Gmail - Email by Google', ios: 'Gmail' },
+  { store: 'Microsoft Outlook', ios: 'Outlook' },
+  { store: 'Google Chrome', ios: 'Chrome' },
+  { store: 'Google Drive', ios: 'Drive' },
+  { store: 'Google Maps', ios: 'Google Maps' },
+  { store: 'Waze Navigation Live', ios: 'Waze' },
+  { store: 'Dropbox: Cloud Storage', ios: 'Dropbox' },
+  { store: 'Zoom Workplace', ios: 'Zoom' },
+  { store: 'Notion: Notes Docs', ios: 'Notion' },
+  { store: 'Evernote: Notes Organizer', ios: 'Evernote' },
+  { store: 'Goodnotes 6', ios: 'Goodnotes' },
+  { store: 'Microsoft Word', ios: 'Word' },
+  { store: 'Microsoft Excel', ios: 'Excel' },
+  { store: 'Microsoft PowerPoint', ios: 'PowerPoint' },
+  { store: 'Canva: Design Photo', ios: 'Canva' },
+  { store: 'Adobe Scan: PDF Scanner', ios: 'Adobe Scan' },
+  { store: 'CamScanner-PDF Scanner', ios: 'CamScanner' },
+  { store: 'Duolingo - Language', ios: 'Duolingo' },
+  { store: 'Grammarly - AI Writing', ios: 'Grammarly' },
+  { store: '1Password - Password Mgr', ios: '1Password' },
+  { store: 'Amazon Shopping', ios: 'Amazon' },
+  { store: 'Temu: Shop Like a billionaire', ios: 'Temu' },
+  { store: 'SHEIN-Shopping Online', ios: 'SHEIN' },
+  { store: 'eBay: Marketplace', ios: 'eBay' },
+  { store: 'Etsy: Shop Creative', ios: 'Etsy' },
+  { store: 'Walmart: Shopping Food', ios: 'Walmart' },
+  { store: 'Target', ios: 'Target' },
+  { store: 'Nike: Shoes Apparel', ios: 'Nike' },
+  { store: 'DoorDash - Food Delivery', ios: 'DoorDash' },
+  { store: 'Uber Eats: Food Delivery', ios: 'Uber Eats' },
+  { store: 'Starbucks', ios: 'Starbucks' },
+  { store: "McDonald's", ios: "McDonald's" },
+  { store: 'ChatGPT', ios: 'ChatGPT' },
+  { store: 'Claude by Anthropic', ios: 'Claude' },
+  { store: 'Google Gemini', ios: 'Gemini' },
+  { store: 'Microsoft Copilot', ios: 'Copilot' },
+  { store: 'Perplexity: Ask Anything', ios: 'Perplexity' },
+  { store: 'PayPal - Send Shop', ios: 'PayPal' },
+  { store: 'Venmo', ios: 'Venmo' },
+  { store: 'Cash App', ios: 'Cash App' },
+  { store: 'Zelle', ios: 'Zelle' },
+  { store: 'Chase Mobile', ios: 'Chase' },
+  { store: 'Bank of America Mobile', ios: 'BofA' },
+  { store: 'Wells Fargo Mobile', ios: 'Wells Fargo' },
+  { store: 'Robinhood: Investing', ios: 'Robinhood' },
+  { store: 'Uber - Request a ride', ios: 'Uber' },
+  { store: 'Lyft', ios: 'Lyft' },
+  { store: 'Airbnb', ios: 'Airbnb' },
+  { store: 'Expedia: Hotels Flights', ios: 'Expedia' },
+  { store: 'Strava: Run Bike Hike', ios: 'Strava' },
+  { store: 'MyFitnessPal', ios: 'MyFitnessPal' },
+  { store: 'Calm: Sleep Meditation', ios: 'Calm' },
+  { store: 'Headspace: Meditation', ios: 'Headspace' },
+  { store: 'Roblox', ios: 'Roblox' },
+  { store: 'Candy Crush Saga', ios: 'Candy Crush' },
+  { store: 'Pokemon GO', ios: 'Pokemon GO' },
+  { store: 'Among Us!', ios: 'Among Us' },
+  { store: 'Monopoly GO!', ios: 'Monopoly GO' },
+  { store: 'Royal Match', ios: 'Royal Match' },
+  { store: 'Subway Surfers', ios: 'Subway Surf' },
+  { store: 'Phone', ios: 'Phone' },
+  { store: 'Messages', ios: 'Messages' },
+  { store: 'Safari', ios: 'Safari' },
+  { store: 'Music', ios: 'Music' },
+  { store: 'Photos', ios: 'Photos' },
+  { store: 'Settings', ios: 'Settings' },
+  { store: 'Notes', ios: 'Notes' },
+  { store: 'Wallet', ios: 'Wallet' },
+  { store: 'Mail', ios: 'Mail' },
+  { store: 'Calendar', ios: 'Calendar' },
+  { store: 'Reminders', ios: 'Reminders' },
+  { store: 'Files', ios: 'Files' },
+  { store: 'App Store', ios: 'App Store' },
+  { store: 'Calculator', ios: 'Calculator' },
+  { store: 'Clock', ios: 'Clock' },
+  { store: 'Camera', ios: 'Camera' },
+  { store: 'Health', ios: 'Health' },
+  { store: 'Weather', ios: 'Weather' },
+  { store: 'Find My', ios: 'Find My' },
+  { store: 'Shortcuts', ios: 'Shortcuts' },
+];
+
+const MAX_EXCLUDED_APPS = 3;
+
 const CHARITIES = [
   { id: 'redcross', name: 'Red Cross', emoji: '🏥', desc: 'Disaster relief and humanitarian aid worldwide' },
   { id: 'msf', name: 'Doctors Without Borders', emoji: '⚕️', desc: 'Medical care in conflict zones and emergencies' },
@@ -83,6 +203,11 @@ export default function Goals({ data }) {
   const [dailyLimit, setDailyLimit] = useState(2);
   const [selectedCharity, setSelectedCharity] = useState('redcross');
   const [showInfo, setShowInfo] = useState(false);
+  const [excludedApps, setExcludedApps] = useState([]);
+  const [appSearch, setAppSearch] = useState('');
+  const [showAppDropdown, setShowAppDropdown] = useState(false);
+  const [showExcludeInfo, setShowExcludeInfo] = useState(false);
+  const appPickerRef = useRef(null);
   const charityRef = useRef(null);
 
   // Payment flow state
@@ -90,6 +215,35 @@ export default function Goals({ data }) {
   const [clientSecret, setClientSecret] = useState(null);
   const [paymentError, setPaymentError] = useState(null);
   const pendingGoalRef = useRef(null);
+
+  // Close app dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (appPickerRef.current && !appPickerRef.current.contains(e.target)) {
+        setShowAppDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const filteredApps = useMemo(() => {
+    const q = appSearch.toLowerCase().trim();
+    if (!q) return EXCLUDABLE_APPS;
+    return EXCLUDABLE_APPS.filter(a =>
+      a.ios.toLowerCase().includes(q) || a.store.toLowerCase().includes(q)
+    );
+  }, [appSearch]);
+
+  const toggleExcludedApp = (iosName) => {
+    setExcludedApps(prev => {
+      if (prev.includes(iosName)) return prev.filter(a => a !== iosName);
+      if (prev.length >= MAX_EXCLUDED_APPS) return prev;
+      return [...prev, iosName];
+    });
+    setAppSearch('');
+    setShowAppDropdown(false);
+  };
 
   const range = getChallengeRange();
   const weeklyBudget = +(dailyLimit * range.numDays).toFixed(1);
@@ -130,6 +284,7 @@ export default function Goals({ data }) {
       weekStart: range.startStr,
       weekEnd: range.endStr,
       numDays: range.numDays,
+      ...(excludedApps.length > 0 && { excludedApps }),
     };
 
     pendingGoalRef.current = g;
@@ -315,6 +470,68 @@ export default function Goals({ data }) {
               <p className="text-center text-sm text-muted mt-1">Period budget: <span className="text-cream">{weeklyBudget}h</span></p>
             </div>
 
+            {/* Exclude apps */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <label className="text-xs uppercase tracking-wide text-muted">Exclude apps (optional)</label>
+                <button type="button" onClick={() => setShowExcludeInfo(!showExcludeInfo)}
+                  className="w-5 h-5 rounded-full border border-border text-muted hover:text-cream hover:border-caramel/40 text-[10px] flex items-center justify-center shrink-0 transition"
+                  aria-label="Exclude apps info">?</button>
+              </div>
+              {showExcludeInfo && (
+                <div className="bg-surface rounded-lg p-3 border border-border mb-3 text-sm text-muted leading-relaxed">
+                  <p>We understand that you might need the phone for work purposes, so certain apps won't count toward your screen time target. You can exclude up to {MAX_EXCLUDED_APPS} apps. This cannot be changed once the goal is set.</p>
+                </div>
+              )}
+              {excludedApps.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {excludedApps.map(app => (
+                    <span key={app} className="inline-flex items-center gap-1.5 bg-surface-light border border-border rounded-lg px-2.5 py-1 text-sm text-cream">
+                      {app}
+                      <button type="button" onClick={() => toggleExcludedApp(app)}
+                        className="text-muted hover:text-red-400 transition text-xs leading-none">&times;</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {excludedApps.length < MAX_EXCLUDED_APPS && (
+                <div className="relative" ref={appPickerRef}>
+                  <input
+                    type="text"
+                    value={appSearch}
+                    onChange={e => { setAppSearch(e.target.value); setShowAppDropdown(true); }}
+                    onFocus={() => setShowAppDropdown(true)}
+                    placeholder={`Search apps to exclude (${excludedApps.length}/${MAX_EXCLUDED_APPS})`}
+                    className="w-full bg-surface-light border border-border rounded-lg px-3 py-2 text-sm text-cream placeholder:text-muted/60 focus:outline-none focus:border-caramel/40 transition"
+                  />
+                  {showAppDropdown && (
+                    <div className="absolute z-20 mt-1 w-full bg-surface-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {filteredApps.length === 0 ? (
+                        <p className="px-3 py-2 text-sm text-muted">No apps found</p>
+                      ) : filteredApps.map(app => (
+                        <button
+                          type="button"
+                          key={app.ios}
+                          onClick={() => toggleExcludedApp(app.ios)}
+                          disabled={excludedApps.includes(app.ios)}
+                          className={`w-full text-left px-3 py-2 text-sm transition ${
+                            excludedApps.includes(app.ios)
+                              ? 'text-muted/40 cursor-not-allowed'
+                              : 'text-cream hover:bg-surface-hover'
+                          }`}
+                        >
+                          <span>{app.ios}</span>
+                          {app.ios !== app.store && (
+                            <span className="text-muted text-xs ml-2">({app.store})</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Charity cards with arrows */}
             <div>
               <label className="text-xs uppercase tracking-wide text-muted block mb-3">Choose a charity</label>
@@ -409,7 +626,8 @@ function GoalProgress({ goal, data, onClear, showResetConfirm, setShowResetConfi
     const r = getChallengeRange();
     const weekStart = goal.weekStart || r.startStr;
     const weekEnd = goal.weekEnd || r.endStr;
-    const weekData = parsed.filter(d => d.date >= weekStart && d.date <= weekEnd);
+    const excluded = goal.excludedApps || [];
+    const weekData = parsed.filter(d => d.date >= weekStart && d.date <= weekEnd && !excluded.includes(d.app));
     const weekMinutes = weekData.reduce((s, d) => s + d.minutes, 0);
     const weekHours = weekMinutes / 60;
     const goalHours = goal.weeklyLimit;
@@ -498,6 +716,11 @@ function GoalProgress({ goal, data, onClear, showResetConfirm, setShowResetConfi
             {fmtDate(goal.weekStart)} → {fmtDate(goal.weekEnd)} · {goal.numDays || 7} days · {goal.dailyLimit}h/day · {goal.weeklyLimit}h total · ${stakeAmount} → {goal.charity}
           </p>
           <p className="text-xs text-muted mt-0.5">Stake money: ${stakeAmount}</p>
+          {goal.excludedApps?.length > 0 && (
+            <p className="text-xs text-muted mt-0.5">
+              Excluded: <span className="text-cream">{goal.excludedApps.join(', ')}</span>
+            </p>
+          )}
           {!renewalCancelled && (
             <p className="text-xs text-caramel mt-1">Auto-renews weekly</p>
           )}

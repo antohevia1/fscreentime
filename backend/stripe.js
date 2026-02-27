@@ -450,11 +450,14 @@ module.exports.processPenalties = async () => {
       results.processed++;
 
       // ── Calculate screen time for the challenge week ────────
+      const excludedApps = goal.excludedApps || [];
       let totalMinutes = 0;
       for (const [date, dayData] of Object.entries(allData.days || {})) {
         if (date >= weekStart && date <= weekEnd) {
           const entries = Array.isArray(dayData) ? dayData : (dayData.entries || []);
-          totalMinutes += entries.reduce((sum, e) => sum + (e.minutes || 0), 0);
+          totalMinutes += entries
+            .filter(e => !excludedApps.includes(e.app))
+            .reduce((sum, e) => sum + (e.minutes || 0), 0);
         }
       }
       const screenTimeHours = totalMinutes / 60;
@@ -753,6 +756,7 @@ function buildRenewalGoal(goal) {
     createdAt: new Date().toISOString(),
     ttl: Math.floor(Date.now() / 1000) + 365 * 24 * 3600,
     renewedFrom: goal.weekStart,
+    ...(goal.excludedApps?.length > 0 && { excludedApps: goal.excludedApps }),
   };
 }
 
