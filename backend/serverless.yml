@@ -317,6 +317,7 @@ resources:
         CallbackURLs:
           - http://localhost:5173/app
           - https://www.fscreentime.app/app
+          - https://fscreentime.app/app
         LogoutURLs:
           - http://localhost:5173/
           - https://www.fscreentime.app/
