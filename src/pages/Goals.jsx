@@ -5,6 +5,7 @@ import { parseScreenTimeData } from '../utils/parseData';
 import { useAuth } from '../context/AuthContext';
 import StripePayment from '../components/StripePayment';
 import { trackEvent } from '../utils/analytics';
+import { VIVID, APP_BRAND_COLORS, darkChart, ttFmt, fmt } from '../utils/dashboardUtils';
 
 const CHARITIES = [
   { id: 'redcross', name: 'Red Cross', emoji: '🏥', desc: 'Disaster relief and humanitarian aid worldwide' },
@@ -15,15 +16,6 @@ const CHARITIES = [
   { id: 'feeding', name: 'Feeding America', emoji: '🍎', desc: 'Fighting hunger across the United States' },
   { id: 'stjude', name: "St. Jude Children's Hospital", emoji: '💛', desc: 'Pediatric treatment and research' },
 ];
-
-const VIVID = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#A78BFA', '#F97316', '#06B6D4', '#EC4899'];
-
-const darkChart = {
-  chart: { toolbar: { show: false }, fontFamily: 'inherit', foreColor: '#9a8e80', background: 'transparent' },
-  grid: { borderColor: '#3e3830', strokeDashArray: 3 },
-  dataLabels: { enabled: false },
-  tooltip: { theme: 'dark' },
-};
 
 function fmtDate(iso) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -477,7 +469,7 @@ function GoalProgress({ goal, data, onClear, showResetConfirm, setShowResetConfi
       colors: ['#4ECDC4', '#3e3830'],
       plotOptions: { bar: { columnWidth: '55%', borderRadius: 3 } },
       legend: { position: 'top', labels: { colors: '#9a8e80' } },
-      tooltip: { y: { formatter: v => `${v.toFixed(1)}h` } },
+      tooltip: { y: { formatter: ttFmt } },
     },
   };
 
@@ -487,10 +479,10 @@ function GoalProgress({ goal, data, onClear, showResetConfirm, setShowResetConfi
       ...darkChart,
       chart: { ...darkChart.chart, type: 'donut' },
       labels: stats.apps.map(([k]) => k),
-      colors: VIVID,
+      colors: stats.apps.map(([app], i) => APP_BRAND_COLORS[app.toLowerCase()] || VIVID[i % VIVID.length]),
       legend: { position: 'bottom', labels: { colors: '#9a8e80' } },
       plotOptions: { pie: { donut: { size: '60%' } } },
-      tooltip: { y: { formatter: v => `${(v / 60).toFixed(1)}h` } },
+      tooltip: { y: { formatter: fmt } },
     },
   };
 
