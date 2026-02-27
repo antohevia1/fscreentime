@@ -5,28 +5,27 @@ import { parseScreenTimeData } from '../utils/parseData';
 import ContributionsChart from './ContributionsChart';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
-
-const VIVID = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#A78BFA', '#F97316', '#06B6D4', '#EC4899', '#84CC16', '#F43F5E', '#8B5CF6'];
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-const darkChart = {
-  chart: { toolbar: { show: false }, fontFamily: 'inherit', foreColor: '#9a8e80', background: 'transparent' },
-  grid: { borderColor: '#3e3830', strokeDashArray: 3 },
-  dataLabels: { enabled: false },
-  legend: { position: 'bottom', fontSize: '12px', labels: { colors: '#9a8e80' } },
-  tooltip: { theme: 'dark' },
-};
+import { VIVID, DAY_NAMES, APP_BRAND_COLORS, contrastText, darkChart, fmt, ttFmt } from '../utils/dashboardUtils';
 
 function Dashboard({ data }) {
   const parsed = useMemo(() => parseScreenTimeData(data), [data]);
   const appNames = useMemo(() => [...new Set(parsed.map(d => d.app))].sort(), [parsed]);
 
-  // Stable color map: same app always gets the same color across all charts
+  // Stable color map: brand color if known, otherwise VIVID fallback
   const appColorMap = useMemo(() => {
     const totals = {};
     parsed.forEach(d => { totals[d.app] = (totals[d.app] || 0) + d.minutes; });
     const map = {};
-    Object.entries(totals).sort((a, b) => b[1] - a[1]).forEach(([app], i) => { map[app] = VIVID[i % VIVID.length]; });
+    let vividIdx = 0;
+    Object.entries(totals).sort((a, b) => b[1] - a[1]).forEach(([app]) => {
+      const brand = APP_BRAND_COLORS[app.toLowerCase()];
+      if (brand) {
+        map[app] = brand;
+      } else {
+        map[app] = VIVID[vividIdx % VIVID.length];
+        vividIdx++;
+      }
+    });
     return map;
   }, [parsed]);
 
@@ -38,8 +37,6 @@ function Dashboard({ data }) {
     setSelectedApp(prev => prev === appName ? 'all' : appName);
   }, []);
 
-  const fmt = m => { const h = Math.floor(m / 60); const mn = Math.round(m % 60); return h > 0 ? `${h}h ${mn}m` : `${mn}m`; };
-  const ttFmt = v => { const m = v * 60; const h = Math.floor(m / 60); const mn = Math.round(m % 60); return h > 0 ? `${h}h ${mn}m` : `${mn}m`; };
 
   // For the DoW chart we use a custom legend so clicking filters data rather than toggling series visibility
   const dowChart = useMemo(() => {
@@ -123,20 +120,28 @@ function Dashboard({ data }) {
       appTotals[d.app] = (appTotals[d.app] || 0) + d.minutes;
     });
     const apps = Object.entries(appTotals).sort((a, b) => b[1] - a[1]).map(([app]) => app).slice(0, 10);
+    // Total per date across ALL apps (not just top 10)
+    const dateTotals = {};
+    base.forEach(d => { dateTotals[d.date] = (dateTotals[d.date] || 0) + d.minutes; });
+    const appColors = apps.map((app, i) => selectedApp === 'all' || selectedApp === app ? (appColorMap[app] || VIVID[i % VIVID.length]) : '#3e3830');
+    const n = apps.length;
     return {
       apps,
-      series: apps.map((app, i) => ({
-        name: app,
-        data: dates.map(dt => +((map[`${dt}|${app}`] || 0) / 60).toFixed(2)),
-        color: selectedApp === 'all' || selectedApp === app ? (appColorMap[app] || VIVID[i % VIVID.length]) : '#3e3830',
-      })),
+      series: [
+        ...apps.map((app) => ({
+          name: app,
+          data: dates.map(dt => +((map[`${dt}|${app}`] || 0) / 60).toFixed(2)),
+        })),
+        { name: 'Total', data: dates.map(dt => +((dateTotals[dt] || 0) / 60).toFixed(2)) },
+      ],
       options: {
         ...darkChart,
         chart: { ...darkChart.chart, type: 'area', events: {} },
+        colors: [...appColors, '#ffffff'],
         xaxis: { categories: dates, labels: { rotate: -45, rotateAlways: dates.length > 14 } },
         yaxis: { title: { text: 'Hours', style: { color: '#9a8e80' } }, labels: { formatter: v => { const h = Math.floor(v); const m = Math.round((v - h) * 60); return h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`; } } },
-        stroke: { curve: 'smooth', width: 1 },
-        fill: { type: 'gradient', gradient: { opacityFrom: 0.5, opacityTo: 0.05 } },
+        stroke: { curve: 'smooth', width: [...Array(n).fill(2), 3], dashArray: [...Array(n).fill(0), 5] },
+        fill: { type: [...Array(n).fill('gradient'), 'solid'], gradient: { opacityFrom: 0.3, opacityTo: 0.02 }, opacity: [...Array(n).fill(1), 0.001] },
         tooltip: { y: { formatter: ttFmt } },
         legend: { show: false },
       },
@@ -188,7 +193,12 @@ function Dashboard({ data }) {
         },
         colors: Object.entries(map).sort((a, b) => b[1] - a[1]).map(([app]) => appColorMap[app] || VIVID[0]),
         plotOptions: { treemap: { distributed: true, enableShades: false } },
-        dataLabels: { enabled: true, style: { fontSize: '14px', fontWeight: 600 }, formatter: (text, op) => `${text}` },
+        dataLabels: {
+          enabled: true,
+          style: { fontSize: '14px', fontWeight: 600, colors: Object.entries(map).sort((a, b) => b[1] - a[1]).map(([app]) => contrastText(appColorMap[app] || VIVID[0])) },
+          formatter: (text) => `${text}`,
+          dropShadow: { enabled: false },
+        },
         tooltip: { y: { formatter: v => fmt(v) } },
       },
     };
@@ -289,6 +299,10 @@ function Dashboard({ data }) {
                 {app}
               </button>
             ))}
+            <span className="flex items-center gap-1.5 text-xs text-cream">
+              <span className="w-3.5 h-0 inline-block" style={{ borderTop: '2.5px dashed #ffffff' }} />
+              Total
+            </span>
           </div>
         </div>
 
