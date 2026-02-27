@@ -21,6 +21,15 @@ function Dashboard({ data }) {
   const parsed = useMemo(() => parseScreenTimeData(data), [data]);
   const appNames = useMemo(() => [...new Set(parsed.map(d => d.app))].sort(), [parsed]);
 
+  // Stable color map: same app always gets the same color across all charts
+  const appColorMap = useMemo(() => {
+    const totals = {};
+    parsed.forEach(d => { totals[d.app] = (totals[d.app] || 0) + d.minutes; });
+    const map = {};
+    Object.entries(totals).sort((a, b) => b[1] - a[1]).forEach(([app], i) => { map[app] = VIVID[i % VIVID.length]; });
+    return map;
+  }, [parsed]);
+
   const [timeframe, setTimeframe] = useState('7d');
   const [selectedApp, setSelectedApp] = useState('all');
 
@@ -56,7 +65,7 @@ function Dashboard({ data }) {
       series: allApps.map((app, i) => ({
         name: app,
         data: DAY_NAMES.map((_, idx) => { const e = map[idx]?.[app]; return e ? +(e.total / e.count / 60).toFixed(2) : 0; }),
-        color: selectedApp === 'all' || selectedApp === app ? VIVID[i % VIVID.length] : '#3e3830',
+        color: selectedApp === 'all' || selectedApp === app ? (appColorMap[app] || VIVID[i % VIVID.length]) : '#3e3830',
       })),
       options: {
         ...darkChart,
@@ -68,7 +77,7 @@ function Dashboard({ data }) {
         legend: { show: false }, // custom legend below
       },
     };
-  }, [parsed, timeframe, selectedApp]);
+  }, [parsed, timeframe, selectedApp, appColorMap]);
 
   const filtered = useMemo(() => {
     let result = parsed;
@@ -107,28 +116,32 @@ function Dashboard({ data }) {
       base = base.filter(d => d.date >= cutoff);
     }
     const dates = [...new Set(base.map(d => d.date))].sort();
-    const apps = [...new Set(base.map(d => d.app))].slice(0, 10);
     const map = {};
-    base.forEach(d => { map[`${d.date}|${d.app}`] = (map[`${d.date}|${d.app}`] || 0) + d.minutes; });
+    const appTotals = {};
+    base.forEach(d => {
+      map[`${d.date}|${d.app}`] = (map[`${d.date}|${d.app}`] || 0) + d.minutes;
+      appTotals[d.app] = (appTotals[d.app] || 0) + d.minutes;
+    });
+    const apps = Object.entries(appTotals).sort((a, b) => b[1] - a[1]).map(([app]) => app).slice(0, 10);
     return {
       apps,
       series: apps.map((app, i) => ({
         name: app,
         data: dates.map(dt => +((map[`${dt}|${app}`] || 0) / 60).toFixed(2)),
-        color: selectedApp === 'all' || selectedApp === app ? VIVID[i % VIVID.length] : '#3e3830',
+        color: selectedApp === 'all' || selectedApp === app ? (appColorMap[app] || VIVID[i % VIVID.length]) : '#3e3830',
       })),
       options: {
         ...darkChart,
-        chart: { ...darkChart.chart, type: 'area', stacked: true, events: {} },
+        chart: { ...darkChart.chart, type: 'area', events: {} },
         xaxis: { categories: dates, labels: { rotate: -45, rotateAlways: dates.length > 14 } },
-        yaxis: { title: { text: 'Hours', style: { color: '#9a8e80' } } },
+        yaxis: { title: { text: 'Hours', style: { color: '#9a8e80' } }, labels: { formatter: v => { const h = Math.floor(v); const m = Math.round((v - h) * 60); return h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`; } } },
         stroke: { curve: 'smooth', width: 1 },
         fill: { type: 'gradient', gradient: { opacityFrom: 0.5, opacityTo: 0.05 } },
         tooltip: { y: { formatter: ttFmt } },
         legend: { show: false },
       },
     };
-  }, [parsed, timeframe, selectedApp]);
+  }, [parsed, timeframe, selectedApp, appColorMap]);
 
   const hBarChart = useMemo(() => {
     const map = {};
@@ -147,14 +160,15 @@ function Dashboard({ data }) {
             },
           },
         },
-        plotOptions: { bar: { horizontal: true, barHeight: '55%', borderRadius: 2 } },
+        plotOptions: { bar: { horizontal: true, barHeight: '55%', borderRadius: 2, distributed: true } },
         xaxis: { title: { text: 'Total Hours', style: { color: '#9a8e80' } } },
         labels: sorted.map(([k]) => k),
-        colors: ['#4ECDC4'],
+        colors: sorted.map(([k]) => appColorMap[k] || '#4ECDC4'),
+        legend: { show: false },
         tooltip: { y: { formatter: ttFmt } },
       },
     };
-  }, [filtered, onLegendClick]);
+  }, [filtered, onLegendClick, appColorMap]);
 
   const treemapChart = useMemo(() => {
     const map = {};
@@ -172,13 +186,13 @@ function Dashboard({ data }) {
             },
           },
         },
-        colors: VIVID,
+        colors: Object.entries(map).sort((a, b) => b[1] - a[1]).map(([app]) => appColorMap[app] || VIVID[0]),
         plotOptions: { treemap: { distributed: true, enableShades: false } },
         dataLabels: { enabled: true, style: { fontSize: '14px', fontWeight: 600 }, formatter: (text, op) => `${text}` },
         tooltip: { y: { formatter: v => fmt(v) } },
       },
     };
-  }, [filtered, onLegendClick]);
+  }, [filtered, onLegendClick, appColorMap]);
 
   const appFiltered = useMemo(() => {
     if (selectedApp === 'all') return parsed;
@@ -254,7 +268,7 @@ function Dashboard({ data }) {
                 className="flex items-center gap-1.5 text-xs transition"
                 style={{ color: selectedApp === 'all' || selectedApp === app ? '#f5efe6' : '#3e3830' }}>
                 <span className="w-2.5 h-2.5 rounded-sm inline-block"
-                  style={{ backgroundColor: selectedApp === 'all' || selectedApp === app ? VIVID[i % VIVID.length] : '#3e3830' }} />
+                  style={{ backgroundColor: selectedApp === 'all' || selectedApp === app ? (appColorMap[app] || VIVID[i % VIVID.length]) : '#3e3830' }} />
                 {app}
               </button>
             ))}
@@ -271,7 +285,7 @@ function Dashboard({ data }) {
                 className="flex items-center gap-1.5 text-xs transition"
                 style={{ color: selectedApp === 'all' || selectedApp === app ? '#f5efe6' : '#3e3830' }}>
                 <span className="w-2.5 h-2.5 rounded-sm inline-block"
-                  style={{ backgroundColor: selectedApp === 'all' || selectedApp === app ? VIVID[i % VIVID.length] : '#3e3830' }} />
+                  style={{ backgroundColor: selectedApp === 'all' || selectedApp === app ? (appColorMap[app] || VIVID[i % VIVID.length]) : '#3e3830' }} />
                 {app}
               </button>
             ))}
