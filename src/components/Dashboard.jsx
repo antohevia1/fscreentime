@@ -38,18 +38,19 @@ function Dashboard({ data }) {
   }, []);
 
 
+  // Time-filtered base: shared by dowChart, areaChart, and filtered
+  const timeFiltered = useMemo(() => {
+    if (timeframe === 'all') return parsed;
+    const days = timeframe === '7d' ? 7 : timeframe === '14d' ? 14 : timeframe === '30d' ? 30 : 90;
+    const cutoff = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
+    return parsed.filter(d => d.date >= cutoff);
+  }, [parsed, timeframe]);
+
   // For the DoW chart we use a custom legend so clicking filters data rather than toggling series visibility
   const dowChart = useMemo(() => {
-    // Use ALL time-filtered data (not app-filtered) so all apps appear in the legend
-    let base = parsed;
-    if (timeframe !== 'all') {
-      const days = timeframe === '7d' ? 7 : timeframe === '14d' ? 14 : timeframe === '30d' ? 30 : 90;
-      const cutoff = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
-      base = base.filter(d => d.date >= cutoff);
-    }
-    const allApps = [...new Set(base.map(d => d.app))].slice(0, 10);
+    const allApps = [...new Set(timeFiltered.map(d => d.app))].slice(0, 10);
     const map = {};
-    base.forEach(d => {
+    timeFiltered.forEach(d => {
       const dow = new Date(d.date).getDay();
       if (!map[dow]) map[dow] = {};
       if (!map[dow][d.app]) map[dow][d.app] = { total: 0, count: 0 };
@@ -74,18 +75,12 @@ function Dashboard({ data }) {
         legend: { show: false }, // custom legend below
       },
     };
-  }, [parsed, timeframe, selectedApp, appColorMap]);
+  }, [timeFiltered, selectedApp, appColorMap]);
 
   const filtered = useMemo(() => {
-    let result = parsed;
-    if (timeframe !== 'all') {
-      const days = timeframe === '7d' ? 7 : timeframe === '14d' ? 14 : timeframe === '30d' ? 30 : 90;
-      const cutoff = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
-      result = result.filter(d => d.date >= cutoff);
-    }
-    if (selectedApp !== 'all') result = result.filter(d => d.app === selectedApp);
-    return result;
-  }, [parsed, timeframe, selectedApp]);
+    if (selectedApp !== 'all') return timeFiltered.filter(d => d.app === selectedApp);
+    return timeFiltered;
+  }, [timeFiltered, selectedApp]);
 
   const summary = useMemo(() => {
     const totalMinutes = filtered.reduce((s, d) => s + d.minutes, 0);
@@ -105,24 +100,16 @@ function Dashboard({ data }) {
   }, [filtered]);
 
   const areaChart = useMemo(() => {
-    // Use time-filtered but NOT app-filtered data so all apps appear
-    let base = parsed;
-    if (timeframe !== 'all') {
-      const days = timeframe === '7d' ? 7 : timeframe === '14d' ? 14 : timeframe === '30d' ? 30 : 90;
-      const cutoff = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
-      base = base.filter(d => d.date >= cutoff);
-    }
-    const dates = [...new Set(base.map(d => d.date))].sort();
+    const dates = [...new Set(timeFiltered.map(d => d.date))].sort();
     const map = {};
     const appTotals = {};
-    base.forEach(d => {
+    const dateTotals = {};
+    timeFiltered.forEach(d => {
       map[`${d.date}|${d.app}`] = (map[`${d.date}|${d.app}`] || 0) + d.minutes;
       appTotals[d.app] = (appTotals[d.app] || 0) + d.minutes;
+      dateTotals[d.date] = (dateTotals[d.date] || 0) + d.minutes;
     });
     const apps = Object.entries(appTotals).sort((a, b) => b[1] - a[1]).map(([app]) => app).slice(0, 10);
-    // Total per date across ALL apps (not just top 10)
-    const dateTotals = {};
-    base.forEach(d => { dateTotals[d.date] = (dateTotals[d.date] || 0) + d.minutes; });
     const appColors = apps.map((app, i) => selectedApp === 'all' || selectedApp === app ? (appColorMap[app] || VIVID[i % VIVID.length]) : '#3e3830');
     const n = apps.length;
     return {
@@ -146,7 +133,7 @@ function Dashboard({ data }) {
         legend: { show: false },
       },
     };
-  }, [parsed, timeframe, selectedApp, appColorMap]);
+  }, [timeFiltered, selectedApp, appColorMap]);
 
   const hBarChart = useMemo(() => {
     const map = {};

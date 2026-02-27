@@ -109,7 +109,7 @@ export const contrastText = (hex) => {
 };
 
 export const darkChart = {
-  chart: { toolbar: { show: false }, fontFamily: 'inherit', foreColor: '#9a8e80', background: 'transparent' },
+  chart: { toolbar: { show: false }, fontFamily: 'inherit', foreColor: '#9a8e80', background: 'transparent',  },
   grid: { borderColor: '#3e3830', strokeDashArray: 3 },
   dataLabels: { enabled: false },
   legend: { position: 'bottom', fontSize: '12px', labels: { colors: '#9a8e80' } },
