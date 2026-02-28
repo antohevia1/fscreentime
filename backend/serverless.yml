@@ -321,6 +321,7 @@ resources:
         LogoutURLs:
           - http://localhost:5173/
           - https://www.fscreentime.app/
+          - https://fscreentime.app/
 
     # ── Cognito Identity Pool (for direct S3 access) ────────
     CognitoIdentityPool:
