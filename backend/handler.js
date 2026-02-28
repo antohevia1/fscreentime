@@ -1,10 +1,13 @@
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, PutCommand, QueryCommand, DeleteCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBDocumentClient, PutCommand, QueryCommand, DeleteCommand, GetCommand } = require('@aws-sdk/lib-dynamodb');
 const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command } = require('@aws-sdk/client-s3');
+
+const { sendEmail, templates } = require('./email');
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
 const GOALS_TABLE = process.env.DYNAMODB_GOALS_TABLE;
+const PAYMENTS_TABLE = process.env.DYNAMODB_PAYMENTS_TABLE;
 const DATA_BUCKET = process.env.DATA_BUCKET;
 
 const headers = { 'Content-Type': 'application/json' };
@@ -186,6 +189,28 @@ module.exports.saveGoal = async (event) => {
         ttl: Math.floor(Date.now() / 1000) + 365 * 24 * 3600,
       },
     }));
+
+    // Send goal-created confirmation email
+    try {
+      const paymentRecord = await ddb.send(new GetCommand({
+        TableName: PAYMENTS_TABLE,
+        Key: { userId },
+      }));
+      const userEmail = paymentRecord.Item?.email;
+      if (userEmail) {
+        await sendEmail(userEmail, templates.goalCreated(userEmail, {
+          weekStart: goal.weekStart,
+          weekEnd: goal.weekEnd,
+          dailyLimit: goal.dailyLimit,
+          weeklyLimit: goal.weeklyLimit,
+          charity: goal.charity,
+          amount: goal.amount,
+        }));
+      }
+    } catch (emailErr) {
+      console.error('Goal-created email error:', emailErr);
+      // Don't fail the goal save if email fails
+    }
 
     return res(200, { saved: true });
   } catch (err) {

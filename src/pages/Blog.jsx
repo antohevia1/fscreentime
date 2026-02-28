@@ -6,6 +6,9 @@ import { LogoText } from "../components/Logo";
 function useReveal() {
   const ref = useRef();
   useEffect(() => {
+    const container = ref.current;
+    if (!container) return;
+
     const obs = new IntersectionObserver(
       (entries) =>
         entries.forEach((e) => {
@@ -13,8 +16,23 @@ function useReveal() {
         }),
       { threshold: 0.12 },
     );
-    ref.current?.querySelectorAll(".reveal").forEach((el) => obs.observe(el));
-    return () => obs.disconnect();
+
+    // Observe all current .reveal elements
+    container.querySelectorAll(".reveal").forEach((el) => obs.observe(el));
+
+    // Watch for dynamically-added .reveal elements so none stay invisible
+    const mo = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        for (const node of m.addedNodes) {
+          if (node.nodeType !== 1) continue;
+          if (node.classList?.contains("reveal")) obs.observe(node);
+          node.querySelectorAll?.(".reveal").forEach((el) => obs.observe(el));
+        }
+      }
+    });
+    mo.observe(container, { childList: true, subtree: true });
+
+    return () => { obs.disconnect(); mo.disconnect(); };
   }, []);
   return ref;
 }

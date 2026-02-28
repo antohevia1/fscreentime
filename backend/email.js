@@ -242,6 +242,67 @@ function goalRenewed(email, { weekStart, weekEnd, dailyLimit, weeklyLimit, chari
   };
 }
 
+function goalCreated(email, { weekStart, weekEnd, dailyLimit, weeklyLimit, charity, amount }) {
+  const quotes = [
+    "The key is not to prioritize what's on your schedule, but to schedule your priorities. — Stephen Covey",
+    "Almost everything will work again if you unplug it for a few minutes, including you. — Anne Lamott",
+    "Your focus determines your reality. — George Lucas",
+    "It is not that we have a short time to live, but that we waste a great deal of it. — Seneca",
+    "The successful warrior is the average man, with laser-like focus. — Bruce Lee",
+    "You will never reach your destination if you stop and throw stones at every dog that barks. — Winston Churchill",
+    "Discipline is choosing between what you want now and what you want most. — Abraham Lincoln",
+    "The difference between successful people and really successful people is that really successful people say no to almost everything. — Warren Buffett",
+  ];
+  const quote = quotes[Math.floor(Math.random() * quotes.length)];
+  const displayAmount = typeof amount === 'number' ? amount : 10;
+
+  const content = `
+    <h2 style="margin:0 0 16px;font-size:22px;color:#c4956a;font-weight:600;">Goal Set — Game On!</h2>
+    <p style="margin:0 0 16px;font-size:15px;color:#d4aa80;line-height:1.6;">
+      You've committed to reducing your screen time. Here are the details of your challenge:
+    </p>
+    <div style="background:#2e2a24;border-radius:8px;padding:16px 20px;margin:16px 0;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+        <tr>
+          <td style="padding:4px 0;font-size:14px;color:#9a8e80;">Challenge period</td>
+          <td align="right" style="padding:4px 0;font-size:14px;color:#f5efe6;font-weight:600;">${weekStart} — ${weekEnd}</td>
+        </tr>
+        <tr>
+          <td style="padding:4px 0;font-size:14px;color:#9a8e80;">Daily limit</td>
+          <td align="right" style="padding:4px 0;font-size:14px;color:#f5efe6;font-weight:600;">${dailyLimit}h</td>
+        </tr>
+        <tr>
+          <td style="padding:4px 0;font-size:14px;color:#9a8e80;">Weekly budget</td>
+          <td align="right" style="padding:4px 0;font-size:14px;color:#f5efe6;font-weight:600;">${weeklyLimit}h</td>
+        </tr>
+        <tr>
+          <td style="padding:4px 0;font-size:14px;color:#9a8e80;">Charity</td>
+          <td align="right" style="padding:4px 0;font-size:14px;color:#f5efe6;font-weight:600;">${charity}</td>
+        </tr>
+        <tr>
+          <td style="padding:4px 0;font-size:14px;color:#9a8e80;">Money at stake</td>
+          <td align="right" style="padding:4px 0;font-size:14px;color:#ef4444;font-weight:600;">$${displayAmount}.00</td>
+        </tr>
+      </table>
+    </div>
+    <div style="background:#2e2a24;border-left:3px solid #c4956a;border-radius:4px;padding:16px 20px;margin:16px 0;">
+      <p style="margin:0;font-size:14px;color:#d4aa80;line-height:1.6;font-style:italic;">
+        "${quote}"
+      </p>
+    </div>
+    <p style="margin:16px 0 0;font-size:15px;color:#d4aa80;line-height:1.6;">
+      You've got skin in the game now. Put the phone down and make this week count.
+    </p>
+    <a href="${APP_URL}/app/goals" style="display:inline-block;margin-top:16px;padding:12px 24px;background:#c4956a;color:#1a1714;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">
+      View Your Goal
+    </a>`;
+  return {
+    subject: `Goal set: ${weekStart} to ${weekEnd} — fscreentime`,
+    html: baseTemplate('Goal Set', content),
+    text: `Goal Set — Game On!\n\nYou've committed to reducing your screen time. Here are the details:\n\nChallenge period: ${weekStart} to ${weekEnd}\nDaily limit: ${dailyLimit}h\nWeekly budget: ${weeklyLimit}h\nCharity: ${charity}\nMoney at stake: $${displayAmount}.00\n\n"${quote}"\n\nYou've got skin in the game now. Put the phone down and make this week count.\n\nView your goal: ${APP_URL}/app/goals`,
+  };
+}
+
 function contactFormSubmission({ name, email, rating, message }) {
   const stars = rating ? '★'.repeat(rating) + '☆'.repeat(5 - rating) : 'Not rated';
   const content = `
@@ -309,6 +370,7 @@ module.exports = {
   sendEmail,
   templates: {
     paymentSetupComplete,
+    goalCreated,
     goalPassed,
     penaltyCharged,
     chargeFailed,
