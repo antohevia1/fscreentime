@@ -200,7 +200,9 @@ export default function Goals({ data }) {
     }).finally(() => setGoalLoading(false));
   }, [user?.token]);
 
+  const STAKE_OPTIONS = [10, 25, 50, 100];
   const [dailyLimit, setDailyLimit] = useState(2);
+  const [stakeAmount, setStakeAmount] = useState(10);
   const [selectedCharity, setSelectedCharity] = useState('redcross');
   const [showInfo, setShowInfo] = useState(false);
   const [excludedApps, setExcludedApps] = useState([]);
@@ -277,7 +279,7 @@ export default function Goals({ data }) {
       weeklyLimit: weeklyBudget,
       charity: charity.name,
       charityId: charity.id,
-      amount: 10,
+      amount: stakeAmount,
       autoRenew: true,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       createdAt: new Date().toISOString(),
@@ -383,10 +385,10 @@ export default function Goals({ data }) {
 
           <div className="bg-surface-light rounded-lg p-4 border border-border mb-6 space-y-2">
             <p className="text-sm text-muted">If you exceed <span className="text-cream">{weeklyBudget}h</span> this period:</p>
-            <p className="text-caramel font-semibold">$10.00 → {charity?.name}</p>
+            <p className="text-caramel font-semibold">${pendingGoalRef.current?.amount || stakeAmount}.00 → {charity?.name}</p>
             <div className="flex gap-4 text-xs text-muted pt-1 border-t border-border/50">
-              <span>Donation: <span className="text-cream">$9.00</span></span>
-              <span>Service fee (10%): <span className="text-cream">$1.00</span></span>
+              <span>Donation: <span className="text-cream">${((pendingGoalRef.current?.amount || stakeAmount) * 0.9).toFixed(2)}</span></span>
+              <span>Service fee (10%): <span className="text-cream">${((pendingGoalRef.current?.amount || stakeAmount) * 0.1).toFixed(2)}</span></span>
             </div>
           </div>
 
@@ -433,7 +435,7 @@ export default function Goals({ data }) {
           <h2 className="text-xl font-semibold text-cream mb-2">Set Your Weekly Challenge</h2>
           <p className="text-sm text-muted mb-6 leading-relaxed">
             Choose a daily screen time limit. Your budget for this period is <span className="text-caramel">{weeklyBudget}h</span> ({range.numDays} days).
-            Miss it, and your $10 goes to charity.
+            Miss it, and your stake goes to charity.
           </p>
 
           {/* Challenge period */}
@@ -532,6 +534,23 @@ export default function Goals({ data }) {
               )}
             </div>
 
+            {/* Stake amount */}
+            <div>
+              <label className="text-xs uppercase tracking-wide text-muted block mb-3">Choose your stake</label>
+              <div className="grid grid-cols-4 gap-2">
+                {STAKE_OPTIONS.map(amt => (
+                  <button type="button" key={amt} onClick={() => setStakeAmount(amt)}
+                    className={`py-2.5 rounded-lg border text-sm font-semibold transition ${
+                      stakeAmount === amt
+                        ? 'border-caramel bg-caramel/10 text-caramel'
+                        : 'border-border bg-surface-light text-cream hover:border-caramel/30'
+                    }`}>
+                    ${amt}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Charity cards with arrows */}
             <div>
               <label className="text-xs uppercase tracking-wide text-muted block mb-3">Choose a charity</label>
@@ -559,10 +578,10 @@ export default function Goals({ data }) {
 
             <div className="bg-surface-light rounded-lg p-4 border border-border space-y-2">
               <p className="text-sm text-muted">If you exceed <span className="text-cream">{weeklyBudget}h</span> this period:</p>
-              <p className="text-caramel font-semibold">$10.00 → {CHARITIES.find(c => c.id === selectedCharity)?.name}</p>
+              <p className="text-caramel font-semibold">${stakeAmount}.00 → {CHARITIES.find(c => c.id === selectedCharity)?.name}</p>
               <div className="flex gap-4 text-xs text-muted pt-1 border-t border-border/50">
-                <span>Donation: <span className="text-cream">$9.00</span></span>
-                <span>Service fee (10%): <span className="text-cream">$1.00</span></span>
+                <span>Donation: <span className="text-cream">${(stakeAmount * 0.9).toFixed(2)}</span></span>
+                <span>Service fee (10%): <span className="text-cream">${(stakeAmount * 0.1).toFixed(2)}</span></span>
               </div>
             </div>
             <p className="text-xs text-muted text-center">

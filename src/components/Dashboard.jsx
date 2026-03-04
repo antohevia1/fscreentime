@@ -390,7 +390,7 @@ function GoalHistoryTable({ goals, fmtDate, statusColors }) {
             </p>
           </div>
           <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${statusColors[g.status] || 'text-muted bg-surface-hover border-border'}`}>
-            {g.status === 'passed' ? 'Passed' : g.status === 'charged' ? 'Charged $10' : g.status === 'cancelled' ? 'Cancelled' : g.status?.replace(/_/g, ' ') || 'unknown'}
+            {g.status === 'passed' ? 'Passed' : g.status === 'charged' ? `Charged $${g.amount ? (g.amount / 100).toFixed(0) : '10'}` : g.status === 'cancelled' ? 'Cancelled' : g.status?.replace(/_/g, ' ') || 'unknown'}
           </span>
         </div>
       ))}

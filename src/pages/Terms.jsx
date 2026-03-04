@@ -14,14 +14,14 @@ export default function Terms() {
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-caramel">1. Service Overview</h2>
           <p className="text-sm text-muted leading-relaxed">
-            Screentime provides a screen time analytics dashboard and weekly goal challenge system. Users set a daily screen time limit and stake $10.00 USD per challenge week. If the weekly goal is not met, the staked amount is donated to the user's chosen charity. If the goal is met, no charge is made.
+            Screentime provides a screen time analytics dashboard and weekly goal challenge system. Users set a daily screen time limit and choose a stake amount ($10, $25, $50, or $100 USD) per challenge week. If the weekly goal is not met, the staked amount is donated to the user's chosen charity. If the goal is met, no charge is made.
           </p>
         </section>
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-caramel">2. Service Fee</h2>
           <p className="text-sm text-muted leading-relaxed">
-            Screentime retains a 10% service fee on all processed transactions to cover operational costs including payment processing (Stripe), cloud infrastructure hosting, data storage, and platform maintenance. For a $10.00 stake, the service fee is $1.00. The remaining $9.00 is donated to your selected charity when you miss your goal.
+            Screentime retains a 10% service fee on all processed transactions to cover operational costs including payment processing (Stripe), cloud infrastructure hosting, data storage, and platform maintenance. For example, for a $10.00 stake the service fee is $1.00 and $9.00 is donated; for a $100.00 stake the service fee is $10.00 and $90.00 is donated to your selected charity when you miss your goal.
           </p>
         </section>
 

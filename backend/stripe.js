@@ -305,9 +305,12 @@ module.exports.cancelGoal = async (event) => {
     }
 
     // Charge the forfeit penalty
+    const VALID_AMOUNTS = [1000, 2500, 5000, 10000];
+    const chargeAmount = goal.amount ? goal.amount * 100 : 1000;
+    const safeAmount = VALID_AMOUNTS.includes(chargeAmount) ? chargeAmount : 1000;
     const idempotencyKey = `cancel-${userId}-${weekStart}`;
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: 1000,           // $10.00
+      amount: safeAmount,
       currency: 'usd',
       customer: paymentInfo.Item.stripe_customer_id,
       payment_method: paymentInfo.Item.stripe_payment_method_id,
@@ -328,14 +331,14 @@ module.exports.cancelGoal = async (event) => {
         weekStart, weekEnd: goal.weekEnd,
         goalHours: goal.weeklyLimit || (goal.dailyLimit * (goal.numDays || 7)),
         dailyLimit: goal.dailyLimit, charity: goal.charity || '',
-        status: 'cancelled', charged: true, amount: 1000,
+        status: 'cancelled', charged: true, amount: safeAmount,
         processedAt: new Date().toISOString(),
       });
     }
     await ddb.send(new DeleteCommand({ TableName: GOALS_TABLE, Key: { userId, weekStart } }));
 
     if (paymentInfo.Item?.email) {
-      await sendEmail(paymentInfo.Item.email, templates.goalCancelled(paymentInfo.Item.email, { weekStart, charged: true, amount: 1000 }));
+      await sendEmail(paymentInfo.Item.email, templates.goalCancelled(paymentInfo.Item.email, { weekStart, charged: true, amount: safeAmount }));
     }
     return res(200, { cancelled: true, charged: true, paymentIntentId: paymentIntent.id });
   } catch (err) {
@@ -525,11 +528,14 @@ module.exports.processPenalties = async () => {
         continue;
       }
 
+      const VALID_PENALTY_AMOUNTS = [1000, 2500, 5000, 10000];
+      const penaltyAmount = goal.amount ? goal.amount * 100 : 1000;
+      const safePenalty = VALID_PENALTY_AMOUNTS.includes(penaltyAmount) ? penaltyAmount : 1000;
       const idempotencyKey = `penalty-${userId}-${weekStart}`;
 
       try {
         const paymentIntent = await stripe.paymentIntents.create({
-          amount: 1000,           // $10.00
+          amount: safePenalty,
           currency: 'usd',
           customer: paymentInfo.Item.stripe_customer_id,
           payment_method: paymentInfo.Item.stripe_payment_method_id,
@@ -562,7 +568,7 @@ module.exports.processPenalties = async () => {
         if (userEmail) {
           await sendEmail(userEmail, templates.penaltyCharged(userEmail, {
             weekStart, weekEnd, screenTimeHours: screenTimeHours.toFixed(1), goalHours,
-            amount: 1000, charity: goal.charity || '',
+            amount: safePenalty, charity: goal.charity || '',
           }));
         }
         if (identityId) {
@@ -570,7 +576,7 @@ module.exports.processPenalties = async () => {
             weekStart, weekEnd, goalHours,
             screenTimeHours: parseFloat(screenTimeHours.toFixed(1)),
             dailyLimit: goal.dailyLimit, charity: goal.charity || '',
-            status: 'charged', amount: 1000, processedAt: new Date().toISOString(),
+            status: 'charged', amount: safePenalty, processedAt: new Date().toISOString(),
           }, allData);
           await ddb.send(new DeleteCommand({ TableName: GOALS_TABLE, Key: { userId, weekStart } }));
         }
@@ -664,9 +670,12 @@ module.exports.processPenalties = async () => {
 
       if (!paymentInfo.Item?.stripe_payment_method_id || !paymentInfo.Item?.stripe_customer_id) continue;
 
+      const VALID_RETRY_AMOUNTS = [1000, 2500, 5000, 10000];
+      const retryAmount = failedGoal.amount ? failedGoal.amount * 100 : 1000;
+      const safeRetry = VALID_RETRY_AMOUNTS.includes(retryAmount) ? retryAmount : 1000;
       const retryKey = `retry-${failedGoal.userId}-${failedGoal.weekStart}-${retryCount + 1}`;
       const paymentIntent = await stripe.paymentIntents.create({
-        amount: 1000,
+        amount: safeRetry,
         currency: 'usd',
         customer: paymentInfo.Item.stripe_customer_id,
         payment_method: paymentInfo.Item.stripe_payment_method_id,
@@ -699,7 +708,7 @@ module.exports.processPenalties = async () => {
           weekStart: failedGoal.weekStart, weekEnd: failedGoal.weekEnd,
           goalHours: failedGoal.weeklyLimit || (failedGoal.dailyLimit * (failedGoal.numDays || 7)),
           dailyLimit: failedGoal.dailyLimit, charity: failedGoal.charity || '',
-          status: 'charged', amount: 1000, processedAt: new Date().toISOString(),
+          status: 'charged', amount: safeRetry, processedAt: new Date().toISOString(),
         });
         await ddb.send(new DeleteCommand({
           TableName: GOALS_TABLE,
@@ -800,6 +809,7 @@ async function tryRenewGoal(goal, userEmail) {
         dailyLimit: renewed.dailyLimit,
         weeklyLimit: renewed.weeklyLimit,
         charity: renewed.charity,
+        amount: renewed.amount,
       }));
     }
   } catch (err) {

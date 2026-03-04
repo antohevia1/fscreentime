@@ -72,7 +72,7 @@ function paymentSetupComplete(email) {
     </p>
     <div style="background:#2e2a24;border-radius:8px;padding:16px 20px;margin:16px 0;">
       <p style="margin:0;font-size:14px;color:#9a8e80;">
-        <strong style="color:#f5efe6;">How it works:</strong> If you exceed your weekly limit, a $10 penalty will be automatically charged. Meet your goal and you pay nothing.
+        <strong style="color:#f5efe6;">How it works:</strong> If you exceed your weekly limit, your chosen stake amount will be automatically charged. Meet your goal and you pay nothing.
       </p>
     </div>
     <p style="margin:16px 0 0;font-size:15px;color:#d4aa80;line-height:1.6;">
@@ -81,7 +81,7 @@ function paymentSetupComplete(email) {
   return {
     subject: 'Payment method saved — fscreentime',
     html: baseTemplate('Payment Method Saved', content),
-    text: `Payment Method Saved\n\nYour card has been securely saved. No charges will be made unless you fail to meet your weekly screen time goal.\n\nHow it works: If you exceed your weekly limit, a $10 penalty will be automatically charged. Meet your goal and you pay nothing.\n\nStay focused!`,
+    text: `Payment Method Saved\n\nYour card has been securely saved. No charges will be made unless you fail to meet your weekly screen time goal.\n\nHow it works: If you exceed your weekly limit, your chosen stake amount will be automatically charged. Meet your goal and you pay nothing.\n\nStay focused!`,
   };
 }
 
@@ -203,7 +203,7 @@ function goalCancelled(email, { weekStart, charged, amount }) {
   };
 }
 
-function goalRenewed(email, { weekStart, weekEnd, dailyLimit, weeklyLimit, charity }) {
+function goalRenewed(email, { weekStart, weekEnd, dailyLimit, weeklyLimit, charity, amount }) {
   const content = `
     <h2 style="margin:0 0 16px;font-size:22px;color:#c4956a;font-weight:600;">Goal Renewed</h2>
     <p style="margin:0 0 16px;font-size:15px;color:#d4aa80;line-height:1.6;">
@@ -225,7 +225,7 @@ function goalRenewed(email, { weekStart, weekEnd, dailyLimit, weeklyLimit, chari
         </tr>
         <tr>
           <td style="padding:4px 0;font-size:14px;color:#9a8e80;">Penalty if over</td>
-          <td align="right" style="padding:4px 0;font-size:14px;color:#ef4444;font-weight:600;">$10.00</td>
+          <td align="right" style="padding:4px 0;font-size:14px;color:#ef4444;font-weight:600;">$${typeof amount === 'number' ? amount : 10}.00</td>
         </tr>
       </table>
     </div>
@@ -238,7 +238,7 @@ function goalRenewed(email, { weekStart, weekEnd, dailyLimit, weeklyLimit, chari
   return {
     subject: `Goal renewed: ${weekStart} to ${weekEnd} — fscreentime`,
     html: baseTemplate('Goal Renewed', content),
-    text: `Goal Renewed\n\nYour weekly screen time challenge has been automatically renewed for ${weekStart} to ${weekEnd}.\n\nDaily limit: ${dailyLimit}h\nWeekly budget: ${weeklyLimit}h\nCharity: ${charity}\nPenalty if over: $10.00\n\nTo stop auto-renewal, visit ${APP_URL}/app/goals and tap "Cancel Renewal".`,
+    text: `Goal Renewed\n\nYour weekly screen time challenge has been automatically renewed for ${weekStart} to ${weekEnd}.\n\nDaily limit: ${dailyLimit}h\nWeekly budget: ${weeklyLimit}h\nCharity: ${charity}\nPenalty if over: $${typeof amount === 'number' ? amount : 10}.00\n\nTo stop auto-renewal, visit ${APP_URL}/app/goals and tap "Cancel Renewal".`,
   };
 }
 
