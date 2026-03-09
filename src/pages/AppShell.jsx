@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Dashboard from '../components/Dashboard';
@@ -23,14 +23,16 @@ export default function AppShell() {
   const [collapsed, setCollapsed] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
 
-  useEffect(() => {
-    if (!user?.credentials || !user?.identityId) return;
-    fetchScreenTimeData(user.credentials, user.identityId)
+  const refreshData = useCallback(() => {
+    if (!user?.credentials || !user?.identityId) return Promise.resolve();
+    return fetchScreenTimeData(user.credentials, user.identityId)
       .then(setData)
       .catch(() => {
         fetch('/sample-data.json').then(r => r.json()).then(setData).catch(() => {});
       });
   }, [user]);
+
+  useEffect(() => { refreshData(); }, [refreshData]);
 
   const handleSignOut = () => { signOut(); navigate('/'); };
 
@@ -99,7 +101,7 @@ export default function AppShell() {
             <Routes>
               <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={
-                data ? <Dashboard data={data} /> : <p className="text-muted text-sm">Loading…</p>
+                data ? <Dashboard data={data} onRefresh={refreshData} /> : <p className="text-muted text-sm">Loading…</p>
               } />
               <Route path="goals" element={<Goals data={data} />} />
               <Route path="settings" element={<Settings />} />

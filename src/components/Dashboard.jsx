@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import { VIVID, DAY_NAMES, APP_BRAND_COLORS, contrastText, darkChart, fmt, ttFmt } from '../utils/dashboardUtils';
 
-function Dashboard({ data }) {
+function Dashboard({ data, onRefresh }) {
   const parsed = useMemo(() => parseScreenTimeData(data), [data]);
   const appNames = useMemo(() => [...new Set(parsed.map(d => d.app))].sort(), [parsed]);
 
@@ -212,6 +212,7 @@ function Dashboard({ data }) {
     <DashboardEmpty
       userName={user?.alias || user?.email?.split('@')[0]}
       identityId={user?.identityId}
+      onRefresh={onRefresh}
     />
   );
 
@@ -482,9 +483,10 @@ function ScreenshotCarousel({ items, className = '' }) {
   );
 }
 
-function DashboardEmpty({ userName, identityId }) {
+function DashboardEmpty({ userName, identityId, onRefresh }) {
   const [activeStep, setActiveStep] = useState(0);
   const [completed, setCompleted] = useState([false, false, false]);
+  const [refreshing, setRefreshing] = useState(false);
 
   const markDone = (idx) => {
     setCompleted(prev => {
@@ -497,6 +499,12 @@ function DashboardEmpty({ userName, identityId }) {
 
   const canAccess = (idx) => idx === 0 || completed[idx - 1];
   const allDone = completed.every(Boolean);
+
+  const handleRefresh = () => {
+    if (!onRefresh || refreshing) return;
+    setRefreshing(true);
+    Promise.resolve(onRefresh()).finally(() => setRefreshing(false));
+  };
 
   const steps = [
     {
@@ -827,24 +835,44 @@ function DashboardEmpty({ userName, identityId }) {
 
         {/* 24 h notice / success */}
         <div
-          className={`mt-8 flex items-center gap-3 bg-surface-card border rounded-xl px-4 py-3 md:rounded-2xl md:px-6 md:py-4 max-w-lg mx-auto transition-all duration-500 ${
+          className={`mt-8 flex flex-col items-center gap-4 bg-surface-card border rounded-xl px-4 py-3 md:rounded-2xl md:px-6 md:py-4 max-w-lg mx-auto transition-all duration-500 ${
             allDone ? 'border-emerald-500/30' : 'border-caramel/20'
           }`}
         >
-          <span className="text-xl md:text-2xl shrink-0">{allDone ? '\uD83C\uDF89' : '\u23F3'}</span>
-          <p className="text-xs md:text-sm text-muted leading-relaxed">
-            {allDone ? (
-              <>
-                <span className="text-emerald-400 font-semibold">You're all set!</span>{' '}
-                Your screen time data will appear here within 24 hours after the shortcut runs for the first time.
-              </>
-            ) : (
-              <>
-                <span className="text-cream font-semibold">Please allow at least 24 hours</span>{' '}
-                after your first shortcut run for your data to appear here.
-              </>
-            )}
-          </p>
+          <div className="flex items-center gap-3">
+            <span className="text-xl md:text-2xl shrink-0">{allDone ? '\uD83C\uDF89' : '\u23F3'}</span>
+            <p className="text-xs md:text-sm text-muted leading-relaxed">
+              {allDone ? (
+                <>
+                  <span className="text-emerald-400 font-semibold">You're all set!</span>{' '}
+                  Your screen time data will appear here within 24 hours after the shortcut runs for the first time.
+                </>
+              ) : (
+                <>
+                  <span className="text-cream font-semibold">Please allow at least 24 hours</span>{' '}
+                  after your first shortcut run for your data to appear here.
+                </>
+              )}
+            </p>
+          </div>
+          {allDone && (
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-caramel/10 border border-caramel/30 text-caramel text-sm font-semibold hover:bg-caramel/20 disabled:opacity-50 transition-all"
+            >
+              <svg
+                width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                className={refreshing ? 'animate-spin' : ''}
+              >
+                <path d="M21.5 2v6h-6" />
+                <path d="M2.5 22v-6h6" />
+                <path d="M2.5 11.5a10 10 0 0 1 18.4-4.5L21.5 8" />
+                <path d="M21.5 12.5a10 10 0 0 1-18.4 4.5L2.5 16" />
+              </svg>
+              {refreshing ? 'Checking…' : 'Refresh Data'}
+            </button>
+          )}
         </div>
 
       </div>

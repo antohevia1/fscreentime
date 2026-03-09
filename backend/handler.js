@@ -2,7 +2,7 @@ const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, PutCommand, QueryCommand, DeleteCommand, GetCommand } = require('@aws-sdk/lib-dynamodb');
 const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command } = require('@aws-sdk/client-s3');
 
-const { sendEmail, templates } = require('./email');
+const { sendEmail, templates, SUPPORT_EMAIL } = require('./email');
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -14,13 +14,24 @@ const headers = { 'Content-Type': 'application/json' };
 const res = (statusCode, body) => ({ statusCode, headers, body: JSON.stringify(body) });
 const getUserId = (event) => event.requestContext?.authorizer?.jwt?.claims?.sub;
 
+// Fire-and-forget error notification — never throws, never delays the response
+function notifyError(endpoint, err, event) {
+  const body = event?.body || '';
+  sendEmail(SUPPORT_EMAIL, templates.errorAlert({
+    endpoint,
+    errorMessage: err?.stack || err?.message || String(err),
+    requestBody: typeof body === 'string' ? body.slice(0, 2000) : JSON.stringify(body).slice(0, 2000),
+    timestamp: new Date().toISOString(),
+  })).catch(() => {});
+}
+
 // Parse comma-separated entries: "Google Chrome (2h 13m),Spotify (6m),iTerm (52s)"
 function parseEntries(str) {
   // Strip invisible Unicode characters iOS Shortcuts may insert BEFORE splitting
   const clean = str.replace(/[\u200E\u200F\u200B-\u200D\uFEFF\u2060\u00AD]/g, '');
   return clean.split(/,(?=\s*[A-Za-z0-9])/).map(part => {
     const trimmed = part.trim();
-    const match = trimmed.match(/^([^,]+?)\s*\((?:(\d+)h)?\s*(?:(\d+)m)?\s*(?:(\d+)s)?\)$/i);
+    const match = trimmed.match(/^([^,]+?)\s*\((?:(\d+)\s*h)?\s*(?:(\d+)\s*m(?:in)?)?\s*(?:(\d+)\s*s(?:eg\.?)?)?\)$/i);
     if (!match) return null;
     const app = match[1].trim();
     const minutes = parseInt(match[2] || '0', 10) * 60
@@ -90,7 +101,7 @@ module.exports.ingest = async (event) => {
 
     // Support both "YYYY-MM-DD" and "Mon, 23 Feb 2026 20:50:51 GMT+11"
     const { localDate: date, timezone, tzOffsetHours } = parseDateStr(rawDate);
-
+    
     if (!deviceKey || !date || !Array.isArray(entries) || entries.length === 0) {
       return res(400, { error: 'Missing deviceKey, date, or entries' });
     }
@@ -115,6 +126,7 @@ module.exports.ingest = async (event) => {
     return res(200, { stored: entries.length });
   } catch (err) {
     console.error('Ingest error:', err);
+    notifyError('POST /ingest', err, event);
     return res(500, { error: 'Ingest failed' });
   }
 };
@@ -168,6 +180,7 @@ module.exports.ingestBulk = async (event) => {
     return res(200, { stored: dateKeys.length, totalDays: Object.keys(allData.days).length });
   } catch (err) {
     console.error('IngestBulk error:', err);
+    notifyError('POST /ingest/bulk', err, event);
     return res(500, { error: 'Bulk ingest failed' });
   }
 };
@@ -215,6 +228,7 @@ module.exports.saveGoal = async (event) => {
     return res(200, { saved: true });
   } catch (err) {
     console.error('SaveGoal error:', err);
+    notifyError('POST /goals', err, event);
     return res(500, { error: 'Failed to save goal' });
   }
 };
@@ -245,6 +259,7 @@ module.exports.getGoal = async (event) => {
     return res(200, result.Items?.[0] || null);
   } catch (err) {
     console.error('GetGoal error:', err);
+    notifyError('GET /goals', err, event);
     return res(500, { error: 'Failed to retrieve goal' });
   }
 };
@@ -275,6 +290,7 @@ module.exports.getGoalHistory = async (event) => {
     return res(200, allData.goalHistory || []);
   } catch (err) {
     console.error('GetGoalHistory error:', err);
+    notifyError('GET /goals/history', err, event);
     return res(500, { error: 'Failed to retrieve goal history' });
   }
 };
@@ -321,6 +337,7 @@ module.exports.deleteAccount = async (event) => {
     return res(200, { deleted: true });
   } catch (err) {
     console.error('DeleteAccount error:', err);
+    notifyError('POST /delete-account', err, event);
     return res(500, { error: 'Failed to delete account data' });
   }
 };

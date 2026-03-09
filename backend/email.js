@@ -334,6 +334,39 @@ function contactFormSubmission({ name, email, rating, message }) {
   };
 }
 
+function errorAlert({ endpoint, errorMessage, requestBody, timestamp }) {
+  const truncatedBody = requestBody && requestBody.length > 1000
+    ? requestBody.slice(0, 1000) + '…(truncated)'
+    : (requestBody || 'N/A');
+  const content = `
+    <h2 style="margin:0 0 16px;font-size:22px;color:#ef4444;font-weight:600;">Endpoint Error</h2>
+    <div style="background:#2e2a24;border-radius:8px;padding:16px 20px;margin:16px 0;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+        <tr>
+          <td style="padding:4px 0;font-size:14px;color:#9a8e80;">Endpoint</td>
+          <td align="right" style="padding:4px 0;font-size:14px;color:#f5efe6;font-weight:600;">${escapeHtml(endpoint)}</td>
+        </tr>
+        <tr>
+          <td style="padding:4px 0;font-size:14px;color:#9a8e80;">Time (UTC)</td>
+          <td align="right" style="padding:4px 0;font-size:14px;color:#f5efe6;">${escapeHtml(timestamp)}</td>
+        </tr>
+      </table>
+    </div>
+    <div style="background:#2e2a24;border-radius:8px;padding:16px 20px;margin:16px 0;">
+      <p style="margin:0 0 8px;font-size:12px;color:#9a8e80;text-transform:uppercase;letter-spacing:1px;">Error</p>
+      <p style="margin:0;font-size:14px;color:#ef4444;line-height:1.6;white-space:pre-wrap;">${escapeHtml(errorMessage)}</p>
+    </div>
+    <div style="background:#2e2a24;border-radius:8px;padding:16px 20px;margin:16px 0;">
+      <p style="margin:0 0 8px;font-size:12px;color:#9a8e80;text-transform:uppercase;letter-spacing:1px;">Request Body</p>
+      <p style="margin:0;font-size:13px;color:#d4aa80;line-height:1.5;white-space:pre-wrap;word-break:break-all;">${escapeHtml(truncatedBody)}</p>
+    </div>`;
+  return {
+    subject: `[fscreentime] ERROR in ${endpoint}`,
+    html: baseTemplate('Endpoint Error', content),
+    text: `Endpoint Error\n\nEndpoint: ${endpoint}\nTime: ${timestamp}\n\nError:\n${errorMessage}\n\nRequest Body:\n${truncatedBody}`,
+  };
+}
+
 // ── HTML escaping for user-submitted content ──────────────────────────
 function escapeHtml(str) {
   if (!str) return '';
@@ -377,6 +410,7 @@ module.exports = {
     goalCancelled,
     goalRenewed,
     contactFormSubmission,
+    errorAlert,
   },
   escapeHtml,
   FROM_EMAIL,
