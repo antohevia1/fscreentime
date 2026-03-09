@@ -131,6 +131,7 @@ function Dashboard({ data, onRefresh }) {
         fill: { type: [...Array(n).fill('gradient'), 'solid'], gradient: { opacityFrom: 0.3, opacityTo: 0.02 }, opacity: [...Array(n).fill(1), 0.001] },
         tooltip: { y: { formatter: ttFmt } },
         legend: { show: false },
+        ...(dates.length > 14 ? { responsive: [{ breakpoint: 768, options: { xaxis: { tickAmount: Math.min(dates.length, 6) } } }] } : {}),
       },
     };
   }, [timeFiltered, selectedApp, appColorMap]);
