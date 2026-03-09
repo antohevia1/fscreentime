@@ -69,13 +69,13 @@ function Dashboard({ data, onRefresh }) {
         ...darkChart,
         chart: { ...darkChart.chart, type: 'bar', events: {} },
         xaxis: { categories: DAY_NAMES },
-        yaxis: { title: { text: 'Avg Hours', style: { color: '#9a8e80' } } },
+        yaxis: { title: { text: timeframe === '7d' ? 'Hours' : 'Avg Hours', style: { color: '#9a8e80' } } },
         plotOptions: { bar: { columnWidth: '65%', borderRadius: 2 } },
         tooltip: { y: { formatter: ttFmt } },
         legend: { show: false }, // custom legend below
       },
     };
-  }, [timeFiltered, selectedApp, appColorMap]);
+  }, [timeFiltered, timeframe, selectedApp, appColorMap]);
 
   const filtered = useMemo(() => {
     if (selectedApp !== 'all') return timeFiltered.filter(d => d.app === selectedApp);
@@ -123,9 +123,9 @@ function Dashboard({ data, onRefresh }) {
       ],
       options: {
         ...darkChart,
-        chart: { ...darkChart.chart, type: 'area', events: {} },
+        chart: { ...darkChart.chart, type: 'area', events: {}, zoom: { enabled: false }, selection: { enabled: false } },
         colors: [...appColors, '#ffffff'],
-        xaxis: { categories: dates, labels: { rotate: -45, rotateAlways: dates.length > 14 } },
+        xaxis: { categories: dates, labels: { rotate: -45, rotateAlways: dates.length > 14, ...(dates.length > 14 ? { show: true, hideOverlappingLabels: true } : {}) }, ...(dates.length > 14 ? { tickAmount: Math.min(dates.length, 10) } : {}) },
         yaxis: { title: { text: 'Hours', style: { color: '#9a8e80' } }, labels: { formatter: v => { const h = Math.floor(v); const m = Math.round((v - h) * 60); return h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`; } } },
         stroke: { curve: 'smooth', width: [...Array(n).fill(2), 3], dashArray: [...Array(n).fill(0), 5] },
         fill: { type: [...Array(n).fill('gradient'), 'solid'], gradient: { opacityFrom: 0.3, opacityTo: 0.02 }, opacity: [...Array(n).fill(1), 0.001] },
@@ -223,7 +223,7 @@ function Dashboard({ data, onRefresh }) {
       {/* Filters + Summary */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
         <select value={timeframe} onChange={e => setTimeframe(e.target.value)} aria-label="Timeframe" className={selectClass}>
-          <option value="7d">This Week</option>
+          <option value="7d">Last 7 Days</option>
           <option value="14d">Last 14 Days</option>
           <option value="30d">Last 30 Days</option>
           <option value="90d">Last 90 Days</option>
@@ -258,7 +258,7 @@ function Dashboard({ data, onRefresh }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* DoW chart with custom legend */}
         <div className="bg-surface-card border border-border rounded-xl p-5">
-          <h3 className="text-sm font-medium text-cream mb-2">Avg by Day of Week</h3>
+          <h3 className="text-sm font-medium text-cream mb-2">{timeframe === '7d' ? 'Time by Day of Week' : 'Avg by Day of Week'}</h3>
           <Chart options={dowChart.options} series={dowChart.series} type="bar" height={280} />
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 justify-center">
             {dowChart.apps.map((app, i) => (
