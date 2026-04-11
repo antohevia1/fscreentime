@@ -217,8 +217,9 @@ functions:
     timeout: 120
     events:
       - schedule:
-          rate: cron(0 * ? * SUN-TUE *)
+          rate: cron(0 * ? * SUN,MON,TUE *)
           enabled: true
+          name: ${self:service}-${sls:stage}-processPenalties
 
 resources:
   Conditions:

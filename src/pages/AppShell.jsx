@@ -23,16 +23,18 @@ export default function AppShell() {
   const [collapsed, setCollapsed] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
 
-  const refreshData = useCallback(() => {
+  const loadData = useCallback(({ noCache = false } = {}) => {
     if (!user?.credentials || !user?.identityId) return Promise.resolve();
-    return fetchScreenTimeData(user.credentials, user.identityId)
+    return fetchScreenTimeData(user.credentials, user.identityId, { noCache })
       .then(setData)
       .catch(() => {
         fetch('/sample-data.json').then(r => r.json()).then(setData).catch(() => {});
       });
   }, [user]);
 
-  useEffect(() => { refreshData(); }, [refreshData]);
+  const refreshData = useCallback(() => loadData({ noCache: true }), [loadData]);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const handleSignOut = () => { signOut(); navigate('/'); };
 
