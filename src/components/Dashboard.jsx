@@ -6,17 +6,52 @@ import ContributionsChart from './ContributionsChart';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import { VIVID, DAY_NAMES, APP_BRAND_COLORS, contrastText, darkChart, fmt, ttFmt } from '../utils/dashboardUtils';
+import ProgressTab from './ProgressTab';
 
-function Dashboard({ data, onRefresh }) {
+function Dashboard({ data, goalHistory = [], onRefresh }) {
   const parsed = useMemo(() => parseScreenTimeData(data), [data]);
   const appNames = useMemo(() => [...new Set(parsed.map(d => d.app))].sort(), [parsed]);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState('usage');
 
   const handleRefresh = useCallback(() => {
     if (!onRefresh || refreshing) return;
     setRefreshing(true);
     Promise.resolve(onRefresh()).finally(() => setRefreshing(false));
   }, [onRefresh, refreshing]);
+
+  // ── Reward stats: time reclaimed, streak, savings jar ──
+  const rewards = useMemo(() => {
+    // Time reclaimed: compare baseline (first 7 days avg) to all subsequent usage
+    const allDates = [...new Set(parsed.map(d => d.date))].sort();
+    let reclaimedMinutes = 0;
+    if (allDates.length > 7) {
+      const baselineDates = new Set(allDates.slice(0, 7));
+      const baselineMinutes = parsed.filter(d => baselineDates.has(d.date)).reduce((s, d) => s + d.minutes, 0);
+      const baselineDailyAvg = baselineMinutes / 7;
+      const laterDates = allDates.slice(7);
+      laterDates.forEach(date => {
+        const dayTotal = parsed.filter(d => d.date === date).reduce((s, d) => s + d.minutes, 0);
+        const saved = baselineDailyAvg - dayTotal;
+        if (saved > 0) reclaimedMinutes += saved;
+      });
+    }
+
+    // Streak: consecutive "passed" goals from most recent backward
+    const sortedGoals = [...goalHistory].sort((a, b) => (b.weekStart || '').localeCompare(a.weekStart || ''));
+    let streak = 0;
+    for (const g of sortedGoals) {
+      if (g.status === 'passed') streak++;
+      else break;
+    }
+
+    // Savings jar: sum amounts of passed goals (amount is in dollars)
+    const totalSaved = goalHistory
+      .filter(g => g.status === 'passed')
+      .reduce((s, g) => s + (g.amount || 10), 0);
+
+    return { reclaimedMinutes, streak, totalSaved, totalGoals: goalHistory.length };
+  }, [parsed, goalHistory]);
 
   // Stable color map: brand color if known, otherwise VIVID fallback
   const appColorMap = useMemo(() => {
@@ -228,109 +263,151 @@ function Dashboard({ data, onRefresh }) {
 
   return (
     <div className="space-y-5">
-      {/* Filters + Summary */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-        <select value={timeframe} onChange={e => setTimeframe(e.target.value)} aria-label="Timeframe" className={selectClass}>
-          <option value="7d">Last 7 Days</option>
-          <option value="14d">Last 14 Days</option>
-          <option value="30d">Last 30 Days</option>
-          <option value="90d">Last 90 Days</option>
-          <option value="all">All Time</option>
-        </select>
-        <select value={selectedApp} onChange={e => setSelectedApp(e.target.value)} aria-label="App filter" className={selectClass}>
-          <option value="all">All Apps</option>
-          {appNames.map(a => <option key={a} value={a}>{a}</option>)}
-        </select>
-        {selectedApp !== 'all' && (
-          <button onClick={() => setSelectedApp('all')} className="text-xs text-caramel hover:text-caramel-light transition">
-            ✕ Clear filter
-          </button>
-        )}
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="flex items-center gap-1.5 text-xs text-muted hover:text-cream border border-border rounded-lg px-3 py-1.5 hover:bg-surface-card transition disabled:opacity-50"
-          aria-label="Refresh data"
-        >
-          <svg className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 2v6h-6" />
-            <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-            <path d="M3 22v-6h6" />
-            <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-          </svg>
-          {refreshing ? 'Refreshing…' : 'Refresh'}
-        </button>
-
-        <div className="ml-auto flex flex-wrap gap-4">
+      {/* Tab bar + refresh */}
+      <div className="flex items-center gap-3 border-b border-border pb-0">
+        <div className="flex gap-1">
           {[
-            { label: 'Total', value: fmt(summary.totalMinutes) },
-            { label: 'Daily Avg', value: fmt(summary.avgDaily) },
-            { label: 'Last Week', value: fmt(summary.lastWeekMin) },
-            { label: 'vs Prev', value: summary.change !== null ? `${summary.change > 0 ? '+' : ''}${summary.change}%` : '—', color: summary.change > 0 ? 'text-red-400' : 'text-emerald-400' },
-          ].map((s, i) => (
-            <div key={i} className="bg-surface-card border border-border rounded-lg px-4 py-2.5">
-              <p className="text-[11px] uppercase tracking-wide text-muted">{s.label}</p>
-              <p className={`text-lg font-semibold ${s.color || 'text-cream'}`}>{s.value}</p>
-            </div>
+            { id: 'usage', label: 'Usage', icon: (
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 20V10" /><path d="M12 20V4" /><path d="M6 20v-6" />
+              </svg>
+            )},
+            { id: 'progress', label: 'Progress', icon: (
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 12c0 5.5 4.5 10 10 10s10-4.5 10-10" />
+                <path d="M12 2C6.5 2 2 6.5 2 12" />
+                <path d="M7 9l3 3 7-7" />
+              </svg>
+            )},
+          ].map(tab => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all border-b-2 -mb-px ${
+                activeTab === tab.id
+                  ? 'text-cream border-caramel'
+                  : 'text-muted border-transparent hover:text-cream hover:border-border'
+              }`}>
+              {tab.icon}
+              {tab.label}
+            </button>
           ))}
         </div>
+        <div className="ml-auto">
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 text-xs text-muted hover:text-cream border border-border rounded-lg px-3 py-1.5 hover:bg-surface-card transition disabled:opacity-50"
+            aria-label="Refresh data"
+          >
+            <svg className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 2v6h-6" />
+              <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+              <path d="M3 22v-6h6" />
+              <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+            </svg>
+            {refreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* DoW chart with custom legend */}
-        <div className="bg-surface-card border border-border rounded-xl p-5">
-          <h3 className="text-sm font-medium text-cream mb-2">{timeframe === '7d' ? 'Time by Day of Week' : 'Avg by Day of Week'}</h3>
-          <Chart options={dowChart.options} series={dowChart.series} type="bar" height={280} />
-          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 justify-center">
-            {dowChart.apps.map((app, i) => (
-              <button key={app} onClick={() => onLegendClick(app)}
-                className="flex items-center gap-1.5 text-xs transition"
-                style={{ color: selectedApp === 'all' || selectedApp === app ? '#f5efe6' : '#3e3830' }}>
-                <span className="w-2.5 h-2.5 rounded-sm inline-block"
-                  style={{ backgroundColor: selectedApp === 'all' || selectedApp === app ? (appColorMap[app] || VIVID[i % VIVID.length]) : '#3e3830' }} />
-                {app}
+      {/* ── Progress Tab ── */}
+      {activeTab === 'progress' && (
+        <ProgressTab goalHistory={goalHistory} rewards={rewards} hasActiveGoal={activeGoal != null} />
+      )}
+
+      {/* ── Usage Tab ── */}
+      {activeTab === 'usage' && (
+        <>
+          {/* Filters + Summary */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+            <select value={timeframe} onChange={e => setTimeframe(e.target.value)} aria-label="Timeframe" className={selectClass}>
+              <option value="7d">Last 7 Days</option>
+              <option value="14d">Last 14 Days</option>
+              <option value="30d">Last 30 Days</option>
+              <option value="90d">Last 90 Days</option>
+              <option value="all">All Time</option>
+            </select>
+            <select value={selectedApp} onChange={e => setSelectedApp(e.target.value)} aria-label="App filter" className={selectClass}>
+              <option value="all">All Apps</option>
+              {appNames.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
+            {selectedApp !== 'all' && (
+              <button onClick={() => setSelectedApp('all')} className="text-xs text-caramel hover:text-caramel-light transition">
+                ✕ Clear filter
               </button>
+            )}
+
+            <div className="ml-auto flex flex-wrap gap-4">
+              {[
+                { label: 'Total', value: fmt(summary.totalMinutes) },
+                { label: 'Daily Avg', value: fmt(summary.avgDaily) },
+                { label: 'Last Week', value: fmt(summary.lastWeekMin) },
+                { label: 'vs Prev', value: summary.change !== null ? `${summary.change > 0 ? '+' : ''}${summary.change}%` : '—', color: summary.change > 0 ? 'text-red-400' : 'text-emerald-400' },
+              ].map((s, i) => (
+                <div key={i} className="bg-surface-card border border-border rounded-lg px-4 py-2.5">
+                  <p className="text-[11px] uppercase tracking-wide text-muted">{s.label}</p>
+                  <p className={`text-lg font-semibold ${s.color || 'text-cream'}`}>{s.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {/* DoW chart with custom legend */}
+            <div className="bg-surface-card border border-border rounded-xl p-5">
+              <h3 className="text-sm font-medium text-cream mb-2">{timeframe === '7d' ? 'Time by Day of Week' : 'Avg by Day of Week'}</h3>
+              <Chart options={dowChart.options} series={dowChart.series} type="bar" height={280} />
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 justify-center">
+                {dowChart.apps.map((app, i) => (
+                  <button key={app} onClick={() => onLegendClick(app)}
+                    className="flex items-center gap-1.5 text-xs transition"
+                    style={{ color: selectedApp === 'all' || selectedApp === app ? '#f5efe6' : '#3e3830' }}>
+                    <span className="w-2.5 h-2.5 rounded-sm inline-block"
+                      style={{ backgroundColor: selectedApp === 'all' || selectedApp === app ? (appColorMap[app] || VIVID[i % VIVID.length]) : '#3e3830' }} />
+                    {app}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Area chart with custom legend */}
+            <div className="bg-surface-card border border-border rounded-xl p-5">
+              <h3 className="text-sm font-medium text-cream mb-2">Usage Over Time</h3>
+              <Chart options={areaChart.options} series={areaChart.series} type="area" height={280} />
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 justify-center">
+                {areaChart.apps.map((app, i) => (
+                  <button key={app} onClick={() => onLegendClick(app)}
+                    className="flex items-center gap-1.5 text-xs transition"
+                    style={{ color: selectedApp === 'all' || selectedApp === app ? '#f5efe6' : '#3e3830' }}>
+                    <span className="w-2.5 h-2.5 rounded-sm inline-block"
+                      style={{ backgroundColor: selectedApp === 'all' || selectedApp === app ? (appColorMap[app] || VIVID[i % VIVID.length]) : '#3e3830' }} />
+                    {app}
+                  </button>
+                ))}
+                <span className="flex items-center gap-1.5 text-xs text-cream">
+                  <span className="w-3.5 h-0 inline-block" style={{ borderTop: '2.5px dashed #ffffff' }} />
+                  Total
+                </span>
+              </div>
+            </div>
+
+            {[
+              { title: 'Top Apps', chart: hBarChart, type: 'bar', h: 380 },
+              { title: 'Time Distribution by App', chart: treemapChart, type: 'treemap', h: 320 },
+            ].map((c, i) => (
+              <div key={i} className="bg-surface-card border border-border rounded-xl p-5">
+                <h3 className="text-sm font-medium text-cream mb-2">{c.title}</h3>
+                <Chart options={c.chart.options} series={c.chart.series} type={c.type} height={c.h} />
+              </div>
             ))}
           </div>
-        </div>
 
-        {/* Area chart with custom legend */}
-        <div className="bg-surface-card border border-border rounded-xl p-5">
-          <h3 className="text-sm font-medium text-cream mb-2">Usage Over Time</h3>
-          <Chart options={areaChart.options} series={areaChart.series} type="area" height={280} />
-          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 justify-center">
-            {areaChart.apps.map((app, i) => (
-              <button key={app} onClick={() => onLegendClick(app)}
-                className="flex items-center gap-1.5 text-xs transition"
-                style={{ color: selectedApp === 'all' || selectedApp === app ? '#f5efe6' : '#3e3830' }}>
-                <span className="w-2.5 h-2.5 rounded-sm inline-block"
-                  style={{ backgroundColor: selectedApp === 'all' || selectedApp === app ? (appColorMap[app] || VIVID[i % VIVID.length]) : '#3e3830' }} />
-                {app}
-              </button>
-            ))}
-            <span className="flex items-center gap-1.5 text-xs text-cream">
-              <span className="w-3.5 h-0 inline-block" style={{ borderTop: '2.5px dashed #ffffff' }} />
-              Total
-            </span>
-          </div>
-        </div>
+          <ContributionsChart data={appFiltered} />
 
-        {[
-          { title: 'Top Apps', chart: hBarChart, type: 'bar', h: 380 },
-          { title: 'Time Distribution by App', chart: treemapChart, type: 'treemap', h: 320 },
-        ].map((c, i) => (
-          <div key={i} className="bg-surface-card border border-border rounded-xl p-5">
-            <h3 className="text-sm font-medium text-cream mb-2">{c.title}</h3>
-            <Chart options={c.chart.options} series={c.chart.series} type={c.type} height={c.h} />
-          </div>
-        ))}
-      </div>
-
-      <ContributionsChart data={appFiltered} />
-
-      {/* Goal History */}
-      <GoalHistorySection goalHistory={data.goalHistory} hasActiveGoal={activeGoal != null} />
+          {/* Goal History */}
+          <GoalHistorySection goalHistory={goalHistory} hasActiveGoal={activeGoal != null} />
+        </>
+      )}
     </div>
   );
 }

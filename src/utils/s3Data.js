@@ -14,7 +14,7 @@ export async function fetchScreenTimeData(credentials, identityId, { noCache = f
     resp = await s3.send(new GetObjectCommand(params));
   } catch (err) {
     if (err.name === 'NoSuchKey' || err.$metadata?.httpStatusCode === 403 || err.$metadata?.httpStatusCode === 404) {
-      return []; // No data yet
+      return { entries: [], goalHistory: [] }; // No data yet
     }
     throw err;
   }
@@ -22,10 +22,12 @@ export async function fetchScreenTimeData(credentials, identityId, { noCache = f
   const text = await resp.Body.transformToString();
   const allData = JSON.parse(text);
 
-  if (!allData.days) return [];
+  if (!allData.days) return { entries: [], goalHistory: [] };
 
-  return Object.entries(allData.days).flatMap(([date, dayData]) => {
-    const entries = Array.isArray(dayData) ? dayData : dayData.entries || [];
-    return entries.map(e => ({ ...e, date }));
+  const entries = Object.entries(allData.days).flatMap(([date, dayData]) => {
+    const dayEntries = Array.isArray(dayData) ? dayData : dayData.entries || [];
+    return dayEntries.map(e => ({ ...e, date }));
   });
+
+  return { entries, goalHistory: allData.goalHistory || [] };
 }

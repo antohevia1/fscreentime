@@ -7,7 +7,14 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { checkUser(); }, []);
+  useEffect(() => {
+    if (import.meta.env.VITE_DEV_BYPASS_AUTH === 'true') {
+      setUser({ userId: 'dev', identityId: 'dev', email: 'dev@local', alias: 'dev', token: 'dev', credentials: null });
+      setLoading(false);
+      return;
+    }
+    checkUser();
+  }, []);
 
   async function checkUser() {
     try {

@@ -20,17 +20,36 @@ export default function AppShell() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
+  const [goalHistory, setGoalHistory] = useState([]);
   const [collapsed, setCollapsed] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
 
+  const loadSampleData = useCallback(() => {
+    return fetch('/sample-data.json').then(r => r.json()).then(d => {
+      if (d.days) {
+        // Same format as all.json — parse entries from days object
+        const entries = Object.entries(d.days).flatMap(([date, dayData]) => {
+          const dayEntries = Array.isArray(dayData) ? dayData : dayData.entries || [];
+          return dayEntries.map(e => ({ ...e, date }));
+        });
+        setData(entries);
+        setGoalHistory(d.goalHistory || []);
+      } else {
+        setData(Array.isArray(d) ? d : []);
+        setGoalHistory([]);
+      }
+    }).catch(() => {});
+  }, []);
+
   const loadData = useCallback(({ noCache = false } = {}) => {
-    if (!user?.credentials || !user?.identityId) return Promise.resolve();
+    if (!user?.credentials || !user?.identityId) return loadSampleData();
     return fetchScreenTimeData(user.credentials, user.identityId, { noCache })
-      .then(setData)
-      .catch(() => {
-        fetch('/sample-data.json').then(r => r.json()).then(setData).catch(() => {});
-      });
-  }, [user]);
+      .then(result => {
+        setData(result.entries);
+        setGoalHistory(result.goalHistory || []);
+      })
+      .catch(() => loadSampleData());
+  }, [user, loadSampleData]);
 
   const refreshData = useCallback(() => loadData({ noCache: true }), [loadData]);
 
@@ -103,7 +122,7 @@ export default function AppShell() {
             <Routes>
               <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={
-                data ? <Dashboard data={data} onRefresh={refreshData} /> : <p className="text-muted text-sm">Loading…</p>
+                data ? <Dashboard data={data} goalHistory={goalHistory} onRefresh={refreshData} /> : <p className="text-muted text-sm">Loading…</p>
               } />
               <Route path="goals" element={<Goals data={data} />} />
               <Route path="settings" element={<Settings />} />
